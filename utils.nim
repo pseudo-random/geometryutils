@@ -96,8 +96,46 @@ proc `/`*[T](a, b: Vector2[T]): Vector2[T] =
 proc `/`*[T](a: Vector2[T], b: T): Vector2[T] =
   Vector2[T](x: a.x / b, y: a.y / b)
 
+proc length*[T](vec: Vector2[T]): float64 =
+  sqrt(float64(vec.x * vec.x + vec.y * vec.y))
+
+proc normalize*[T](vec: Vector2[T]): Vec2 =
+  let len = vec.length()
+  return Vec2(x: vec.x.float64 / len, y: vec.y.float64 / len)
+
+proc dist*[T](a, b: Vector2[T]): float64 =
+  length(a - b)
+
+proc dot*[T](a, b: Vector2[T]): T =
+  return a.x * b.x + a.y * b.y
+
+proc angle*[T](vec: Vector2[T]): Rad =
+  Rad(arctan2(vec.y.float64, vec.x.float64))
+
+proc `+=`*[T](a: var Vector2[T], b: Vector2[T]) =
+  a.x += b.x
+  a.y += b.y
+
+proc `-=`*[T](a: var Vector2[T], b: Vector2[T]) =
+  a.x -= b.x
+  a.y -= b.y
+
+proc `*=`*[T](a: var Vector2[T], b: Vector2[T]) =
+  a.x *= b.x
+  a.y *= b.y
+
+proc `/=`*[T](a: var Vector2[T], b: Vector2[T]) =
+  a.x /= b.x
+  a.y /= b.y
+
 proc hash*[T](vec: Vector2[T]): Hash =  
   return !$(vec.x.hash() !& vec.y.hash())
+
+proc new_rand_vec2*(range: HSlice[float64, float64]): Vec2 =
+  Vec2(
+    x: rand(range),
+    y: rand(range)
+  )
 
 type
   Vector3*[T] = object
@@ -127,7 +165,7 @@ proc `-`*[T](vec: Vector3[T]): Vector3[T] =
   Vector3[T](x: -vec.x, y: -vec.y, z: -vec.z)
 
 proc length*[T](vec: Vector3[T]): float64 =
-  sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z)
+  sqrt(float64(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z))
 
 proc normalize*[T](vec: Vector3[T]): Vec3 =
   let len = vec.length()
@@ -168,6 +206,15 @@ proc `/=`*[T](a: var Vector3[T], b: Vector3[T]) =
 
 proc hash*[T](vec: Vector3[T]): Hash =  
   return !$(vec.x.hash() !& vec.y.hash() !& vec.z.hash())
+
+proc xy*[T](vec: Vector3[T]): Vector2[T] =
+  return Vector2[T](x: vec.x, y: vec.y)
+
+proc yz*[T](vec: Vector3[T]): Vector2[T] =
+  return Vector2[T](x: vec.y, y: vec.z)
+
+proc xz*[T](vec: Vector3[T]): Vector2[T] =
+  return Vector2[T](x: vec.x, y: vec.z)
 
 proc new_rand_vec3*(range: HSlice[float64, float64]): Vec3 =
   Vec3(
