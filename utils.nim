@@ -414,8 +414,14 @@ type
 proc rgba*(r, g, b, a: float64): Color = 
   Color(r: r, g: g, b: b, a: a)
 
+proc rgba*(value: float64): Color = 
+  Color(r: value, g: value, b: value, a: value)
+
 proc rgb*(r, g, b: float64): Color = 
   Color(r: r, g: g, b: b, a: 1)
+
+proc grey*(value: float64): Color = 
+  Color(r: value, g: value, b: value, a: 1)
   
 proc rgb*(hex: uint32): Color =
   result.r = uint8(hex shr 16).float64() / 255
