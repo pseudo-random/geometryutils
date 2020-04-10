@@ -27,6 +27,8 @@ type
   Rad* = distinct float64
 
 template base_operations(T, B) =
+  proc `-`*(a: T): T {.borrow.}
+
   proc `+`*(a, b: T): T {.borrow.}
   proc `-`*(a, b: T): T {.borrow.}
   proc `*`*(a, b: T): T {.borrow.}
@@ -46,6 +48,8 @@ template base_operations(T, B) =
   proc `<`*(a, b: T): bool {.borrow.}
   proc `==`*(a, b: T): bool {.borrow.}
   proc `<=`*(a, b: T): bool {.borrow.}
+
+  proc abs*(a: T): T {.borrow.}
   
   proc hash*(a: T): Hash {.borrow.}
 
@@ -362,6 +366,15 @@ proc new_rotate_z_mat4*(angle: Rad): Mat4 =
     0, 0, 0, 1
   ])
 
+proc rotate_x(vec: Vec3, angle: Rad): Vec3 =
+  xyz(new_rotate_x_mat4(angle) * new_vec4(vec, 1))
+
+proc rotate_y(vec: Vec3, angle: Rad): Vec3 =
+  xyz(new_rotate_y_mat4(angle) * new_vec4(vec, 1))
+
+proc rotate_z(vec: Vec3, angle: Rad): Vec3 =
+  xyz(new_rotate_z_mat4(angle) * new_vec4(vec, 1))
+
 proc new_rotate_mat4*(quat: Quat): Mat4 =
   return Mat4(data: [
     quat.r * quat.r + quat.i * quat.i - quat.j * quat.j - quat.k * quat.k,
@@ -447,4 +460,36 @@ type
 proc hash*[T](seg: Segment[T]): Hash =
   return !$(seg.a.hash() !& seg.b.hash())
 
+type
+  Location* = object
+    lat*: Deg
+    lon*: Deg
 
+proc angle*(a, b: Location): Rad =
+  arccos(
+    sin(a.lat) * sin(b.lat) +
+    cos(a.lat) * cos(b.lat) * cos(abs(a.lon - b.lon))
+  )
+
+const EARTH_RADIUS*: float64 = 6_371_000.0
+
+proc dist*(a, b: Location,
+           radius: float64 = EARTH_RADIUS): float64 =
+  angle(a, b).float64 * radius
+
+proc to_vector2*(loc: Location): Vector2[Deg] =
+  Vector2[Deg](x: loc.lon, y: loc.lat)
+
+proc to_vec3*(loc: Location,
+              radius: float64 = EARTH_RADIUS): Vec3 =
+  Vec3(x: radius).rotate_y(loc.lat).rotate_z(loc.lon)
+
+proc project_plane*(loc, rel: Location,
+                    radius: float64 = EARTH_RADIUS): Vec2 = 
+  loc.to_vec3(radius).rotate_z(-rel.lon).rotate_y(-rel.lat).yz()
+
+proc new_location*(lat, lon: Deg): Location =
+  Location(lat: lat, lon: lon)
+
+proc new_location*(lat, lon: float64): Location =
+  Location(lat: Deg(lat), lon: Deg(lon))
