@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import xmltree, strtabs, sequtils, strutils
+import xmltree, strtabs, sequtils, strutils, sugar
 import utils
 
 type
@@ -39,7 +39,7 @@ type
       of PathClose: discard
 
   ShapeKind = enum
-    ShapeRect, ShapeCircle, ShapeLine, ShapeText, ShapePath
+    ShapeRect, ShapeCircle, ShapeLine, ShapeText, ShapePath, ShapeBackground
 
   Shape = object
     fill: Color
@@ -64,6 +64,7 @@ type
         font_family: string
       of ShapePath:
         path: seq[PathPoint]
+      of ShapeBackground: discard
 
   VectorRender2* = object
     size*: Index2
@@ -95,10 +96,7 @@ proc add_style(shape: Shape, ren: VectorRender2): Shape =
   result.stroke_width = ren.stroke_width
 
 proc background*(ren: var VectorRender2, color: Color) =
-  ren.shapes.add(Shape(kind: ShapeRect,
-    rect_size: Vec2(x: ren.size.x.float64, y: ren.size.y.float64),
-    fill: color
-  ))
+  ren.shapes.add(Shape(kind: ShapeBackground, fill: color))
 
 proc rect*(ren: var VectorRender2, pos, size: Vec2) =
   ren.shapes.add(Shape(kind: ShapeRect,
@@ -183,7 +181,7 @@ proc to_svg(point: PathPoint): string =
     of PathClose:
       return "Z"
 
-proc to_svg*(shape: Shape): XmlNode =
+proc to_svg*(shape: Shape, size: Index2): XmlNode =
   case shape.kind:
     of ShapeCircle:
       return new_xml_tree("circle", [], to_xml_attributes({
@@ -218,9 +216,14 @@ proc to_svg*(shape: Shape): XmlNode =
       return new_xml_tree("path", [], to_xml_attributes({
         "d": shape.path.map(to_svg).join(" ")
       })).add_style(shape)
+    of ShapeBackground:
+      return new_xml_tree("rect", [], to_xml_attributes({
+        "x": "0", "y": "0",
+        "width": $size.x, "height": $size.y,
+      })).add_style(shape)
 
 proc to_svg*(ren: VectorRender2): XmlNode =
-  new_xml_tree("svg", ren.shapes.map(to_svg), to_xml_attributes({
+  new_xml_tree("svg", ren.shapes.map(shape => to_svg(shape, ren.size)), to_xml_attributes({
     "width": $ren.size.x,
     "height": $ren.size.y,
     "xmlns": "http://www.w3.org/2000/svg"
