@@ -116,6 +116,21 @@ proc dot*[T](a, b: Vector2[T]): T =
 proc angle*[T](vec: Vector2[T]): Rad =
   Rad(arctan2(vec.y.float64, vec.x.float64))
 
+proc min*[T](a, b: Vector2[T]): Vector2[T] =
+  Vector2[T](x: min(a.x, b.x), y: min(a.y, b.y))
+
+proc max*[T](a, b: Vector2[T]): Vector2[T] =
+  Vector2[T](x: max(a.x, b.x), y: max(a.y, b.y))
+
+proc floor*[T](vec: Vector2[T]): Vector2[T] =
+  Vector2[T](x: vec.x.floor(), y: vec.y.floor())
+
+proc ceil*[T](vec: Vector2[T]): Vector2[T] =
+  Vector2[T](x: vec.x.ceil(), y: vec.y.ceil())
+
+proc round*[T](vec: Vector2[T]): Vector2[T] =
+  Vector2[T](x: vec.x.round(), y: vec.y.round())
+
 proc `+=`*[T](a: var Vector2[T], b: Vector2[T]) =
   a.x += b.x
   a.y += b.y
@@ -140,6 +155,12 @@ proc new_rand_vec2*(range: HSlice[float64, float64]): Vec2 =
     x: rand(range),
     y: rand(range)
   )
+
+proc to_vec2*(index2: Index2): Vec2 =
+  Vec2(x: float64(index2.x), y: float64(index2.y))
+
+proc to_index2*(vec: Vec2): Index2 =
+  Index2(x: int(vec.x), y: int(vec.y))
 
 type
   Vector3*[T] = object
@@ -187,6 +208,12 @@ proc cross*[T](a, b: Vector3[T]): Vector3[T] =
     y: a.z * b.x - a.x * b.z,
     z: a.x * b.y - a.y * b.x
   )
+
+proc min*[T](a, b: Vector3[T]): Vector3[T] =
+  Vector3[T](x: min(a.x, b.x), y: min(a.y, b.y), z: min(a.z, b.z))
+
+proc max*[T](a, b: Vector3[T]): Vector3[T] =
+  Vector3[T](x: max(a.x, b.x), y: max(a.y, b.y), z: max(a.z, b.z))
 
 proc `+=`*[T](a: var Vector3[T], b: Vector3[T]) =
   a.x += b.x
@@ -236,6 +263,12 @@ type
   
   Vec4* = Vector4[float64]
   Index4* = Vector4[int]
+
+proc min*[T](a, b: Vector4[T]): Vector4[T] =
+  Vector4[T](x: min(a.x, b.x), y: min(a.y, b.y), z: min(a.z, b.z), w: min(a.w, b.w))
+
+proc max*[T](a, b: Vector4[T]): Vector4[T] =
+  Vector4[T](x: max(a.x, b.x), y: max(a.y, b.y), z: max(a.z, b.z), w: max(a.w, b.w))
 
 proc yzw*[T](vec: Vector4[T]): Vector3[T] =
   Vector3[T](x: vec.y, y: vec.z, z: vec.w)
@@ -499,3 +532,46 @@ proc new_location*(lat, lon: Deg): Location =
 
 proc new_location*(lat, lon: float64): Location =
   Location(lat: Deg(lat), lon: Deg(lon))
+
+type
+  BoundingBox*[T] = object
+    min*: T
+    max*: T
+  
+  Box2* = BoundingBox[Vec2]
+  Box3* = BoundingBox[Vec3]
+  Inter* = BoundingBox[float64]
+
+proc size*[T](box: BoundingBox[T]): T =
+  box.max - box.min
+
+proc center*[T](box: BoundingBox[T]): T =
+  (box.min + box.max) / 2
+
+proc new_bounding_box*[T](points: seq[T]): BoundingBox[T] =
+  result.min = points[0]
+  result.max = points[0]
+  for point in points:
+    result.min = min(result.min, point)
+    result.max = max(result.max, point)
+
+proc new_box2*(points: seq[Vec2]): Box2 = new_bounding_box[Vec2](points)
+proc new_box3*(points: seq[Vec3]): Box3 = new_bounding_box[Vec3](points)
+
+type
+  Viewport*[S, T] = object
+    box*: BoundingBox[S]
+    size*: T
+  
+  Viewport2*[T] = Viewport[Vector2[T], Vector2[T]]
+  Viewport3*[T] = Viewport[Vector3[T], Vector3[T]]
+  
+  View2* = Viewport2[float64]
+
+proc map*[S, T](view: Viewport[S, T], pos: S): T =
+  (pos - view.box.min) / (view.box.size) * view.size
+
+proc map_reverse*[S, T](view: Viewport[S, T], pos: T): S =
+  pos / view.size * view.box.size + view.box.min
+
+
