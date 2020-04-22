@@ -480,10 +480,57 @@ proc hsv*(h, s, v: float64): Color =
 proc `+`*(a, b: Color): Color =
   Color(r: a.r + b.r, g: a.g + b.g, b: a.b + b.b, a: a.a + b.a)
 
+proc `*`*(a: Color, b: float64): Color =
+  Color(r: a.r * b, g: a.g * b, b: a.b * b, a: a.a * b)
+
+proc `*`*(a, b: Color): Color =
+  Color(r: a.r * b.r, g: a.g * b.g, b: a.b * b.b, a: a.a * b.a)
+
+proc `/`*(a: Color, b: float64): Color =
+  Color(r: a.r / b, g: a.g / b, b: a.b / b, a: a.a / b)
+
+proc `+=`*(a: var Color, b: Color) =
+  a.r += b.r
+  a.g += b.g
+  a.b += b.b
+  a.a += b.a
+
+proc `*=`*(a: var Color, b: Color) =
+  a.r *= b.r
+  a.g *= b.g
+  a.b *= b.b
+  a.a *= b.a
+
+proc `/=`*(a: var Color, b: Color) =
+  a.r /= b.r
+  a.g /= b.g
+  a.b /= b.b
+  a.a /= b.a
+
+proc `*=`*(a: var Color, b: float64) =
+  a.r *= b
+  a.g *= b
+  a.b *= b
+  a.a *= b
+
+proc `/=`*(a: var Color, b: float64) =
+  a.r /= b
+  a.g /= b
+  a.b /= b
+  a.a /= b
+
+proc mix*(a, b: Color, factor: float64): Color =
+  return a * (1 - factor) + b * factor
+
 proc average*[T](data: openArray[T]): T =
   for item in data:
     result += item
   result /= T(data.len)
+
+proc average*(colors: openArray[Color]): Color =
+  for color in colors:
+    result += color
+  result /= float64(colors.len)
 
 proc average*[T](data: openArray[Vector3[T]]): Vector3[T] =
   for item in data:
