@@ -186,6 +186,9 @@ proc `/`*[T](a, b: Vector3[T]): Vector3[T] =
 proc `*`*[T](a: Vector3[T], b: T): Vector3[T] =
   Vector3[T](x: a.x * b, y: a.y * b, z: a.z * b)
 
+proc `/`*[T](a: Vector3[T], b: T): Vector3[T] =
+  Vector3[T](x: a.x / b, y: a.y / b, z: a.z / b)
+
 proc `-`*[T](vec: Vector3[T]): Vector3[T] =
   Vector3[T](x: -vec.x, y: -vec.y, z: -vec.z)
 
