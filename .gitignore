@@ -1,2 +1,5 @@
 test
+test_all
 .temp*
+test.svg
+oldtest.nim

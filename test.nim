@@ -40,3 +40,6 @@ macro test*(name: static[string], body: untyped) =
   ))
 
   return stmt_list
+
+proc between*[T](x: T, lower, upper: T): bool =
+  lower < x and x < upper

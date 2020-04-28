@@ -408,13 +408,13 @@ proc new_rotate_z_mat4*(angle: Rad): Mat4 =
     0, 0, 0, 1
   ])
 
-proc rotate_x(vec: Vec3, angle: Rad): Vec3 =
+proc rotate_x*(vec: Vec3, angle: Rad): Vec3 =
   xyz(new_rotate_x_mat4(angle) * new_vec4(vec, 1))
 
-proc rotate_y(vec: Vec3, angle: Rad): Vec3 =
+proc rotate_y*(vec: Vec3, angle: Rad): Vec3 =
   xyz(new_rotate_y_mat4(angle) * new_vec4(vec, 1))
 
-proc rotate_z(vec: Vec3, angle: Rad): Vec3 =
+proc rotate_z*(vec: Vec3, angle: Rad): Vec3 =
   xyz(new_rotate_z_mat4(angle) * new_vec4(vec, 1))
 
 proc new_rotate_mat4*(quat: Quat): Mat4 =
