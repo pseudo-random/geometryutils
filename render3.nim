@@ -274,7 +274,7 @@ type
       of EventResize:
         size*: Index2
       of EventKeyDown, EventKeyUp:
-        discard
+        keycode: int
       of EventWheel:
         delta*: Index2
       else: discard
@@ -339,12 +339,14 @@ proc poll*(window: Window): seq[Event] =
           else:
             discard
       of KeyDown, KeyUp:
-        let event = cast[KeyboardEventPtr](evt.addr)
-        
+        let
+          event = cast[KeyboardEventPtr](evt.addr)
+          keycode = event.keysym.sym.int
+
         if evt.kind == KeyDown:
-          window.add(Event(kind: EventKeyDown))
+          window.add(Event(kind: EventKeyDown, keycode: keycode))
         else:
-          window.add(Event(kind: EventKeyUp))
+          window.add(Event(kind: EventKeyUp, keycode: keycode))
       of MouseMotion:
         let
           event = cast[MouseMotionEventPtr](evt.addr)

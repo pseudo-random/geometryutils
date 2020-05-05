@@ -21,12 +21,13 @@ while is_running:
         break
       of EventWheel, EventMove:
         cont.process(event)
-      else: discard
+      else: echo event
   
   cont.update(ren.camera)
 
   ren.background(grey(1))
   ren.add(cube)
+
   ren.render(stats)
   window.swap()
 
