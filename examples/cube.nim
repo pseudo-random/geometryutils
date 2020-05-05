@@ -27,7 +27,16 @@ while is_running:
 
   ren.background(grey(1))
   ren.add(cube)
-
+  ren.add(Light(kind: LightSun,
+    direction: Vec3(x: 1, y: 0.3, z: 0.5)
+  ))
+  ren.add(Light(kind: LightPoint,
+    pos: Vec3(x: -3, y: -2, z: -4),
+    intensity: 1
+  ))
+  ren.add(Light(kind: LightAmbient,
+    ambient: 0.2
+  ))
   ren.render(stats)
   window.swap()
 

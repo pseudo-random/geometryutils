@@ -130,7 +130,7 @@ type
   ShaderProgram* = object
     id: GLuint
   
-  ShaderError = ref object of Exception
+  ShaderError* = ref object of Exception
 
 proc to_gl(kind: ShaderKind): GLenum =
   case kind:
@@ -179,6 +179,10 @@ proc uniform*(prog: ShaderProgram, name: string, value: float64) =
   let loc = gl_get_uniform_location(prog.id, name.cstring)
   gl_uniform1f(loc, value.GLfloat)
 
+proc uniform*(prog: ShaderProgram, name: string, value: int) =
+  let loc = gl_get_uniform_location(prog.id, name.cstring)
+  gl_uniform1i(loc, value.GLint)
+
 proc uniform*(prog: ShaderProgram, name: string, value: Vec2) =
   let loc = gl_get_uniform_location(prog.id, name.cstring)
   gl_uniform2f(loc, value.x.GLfloat, value.y.GLfloat)
@@ -218,13 +222,13 @@ proc uniform*(prog: ShaderProgram, name: string, value: Mat4) =
   gl_uniform_matrix4fv(loc, 1, true, data[0].addr)
 
 type
-  AttribKind = enum AttribFloat, AttribInt
-  Attribute = object
-    name: string
-    count: int
-    kind: AttribKind
+  AttribKind* = enum AttribFloat, AttribInt
+  Attribute* = object
+    name*: string
+    count*: int
+    kind*: AttribKind
 
-proc size(attrib: Attribute): int =
+proc size*(attrib: Attribute): int =
   case attrib.kind:
     of AttribFloat: return attrib.count * sizeof GLfloat
     of AttribInt: return attrib.count * sizeof GLint
@@ -234,8 +238,8 @@ proc to_gl(kind: AttribKind): GLenum =
     of AttribFloat: return cGL_FLOAT
     of AttribInt: return cGL_INT
 
-proc config_attribs(prog: ShaderProgram,
-                    attribs: openArray[Attribute]) =
+proc config_attribs*(prog: ShaderProgram,
+                     attribs: openArray[Attribute]) =
   var stride = 0
   for attrib in attribs:
     stride += attrib.size()
@@ -380,6 +384,8 @@ proc swap*(window: Window) =
   window.win.gl_swap_window()
 
 type
+  RenderError* = ref object of Exception
+
   Instance* = object
     mat*: Mat4
     color*: Color
@@ -395,19 +401,35 @@ type
     batch_size: int
     instances: seq[Instance]
 
-  Camera = object
+  Camera* = object
     mat*: Mat4
     fov*: Deg
     near*: float64
     far*: float64
 
-  Render3 = object
+  LightKind* = enum LightPoint, LightSun, LightAmbient
+  Light* = object
+    case kind*: LightKind:
+      of LightPoint:
+        pos*: Vec3
+        intensity*: float64 
+      of LightSun:
+        direction*: Vec3 
+      of LightAmbient:
+        ambient*: float64
+
+  Render3* = object
     window: Window
   
     shader_prog: ShaderProgram
     meshes: Table[Mesh, Buffer]
     
     camera*: Camera
+    max_point_lights: int
+    point_lights: seq[Light]
+    max_sun_lights: int
+    sun_lights: seq[Light]
+    ambient_light: float64
 
   Stats* = object
     triangles*: int
@@ -465,6 +487,7 @@ const
     
     out vec3 p_normal;
     out vec4 p_color;
+    out vec3 p_world_pos;
     
     uniform mat4 u_camera_mat;
     uniform mat4 u_model_mat[128];
@@ -473,7 +496,9 @@ const
     void main() {
       p_color = u_color[gl_InstanceID];
       p_normal = (u_model_mat[gl_InstanceID] * vec4(normal, 0)).xyz;
-      gl_Position = u_camera_mat * u_model_mat[gl_InstanceID] * vec4(pos, 1);
+      vec4 world_pos = u_model_mat[gl_InstanceID] * vec4(pos, 1);
+      p_world_pos = world_pos.xyz;
+      gl_Position = u_camera_mat * world_pos;
     }
   """
   FRAGMENT_SHADER_SOURCE = """
@@ -481,15 +506,37 @@ const
   
     in vec4 p_color;
     in vec3 p_normal;
+    in vec3 p_world_pos;
     
     out vec4 color;
     
     uniform vec4 u_color[128];
-    uniform vec3 u_light_dir;
+    
+    uniform vec3 u_suns[1];
+    uniform int u_sun_light_count;
+    uniform vec3 u_point_pos[32];
+    uniform float u_point_intensity[32];
+    uniform int u_point_light_count;
+    uniform float u_ambient_light;
     
     void main() {
-      float intensity = clamp(dot(normalize(p_normal), normalize(u_light_dir)), 0, 1);
-      color = p_color * intensity * 0.8 + 0.2 * p_color;
+      float intensity = u_ambient_light;
+      if (u_sun_light_count > 0) {
+        intensity += clamp(dot(normalize(p_normal), normalize(u_suns[0])), 0, 1);
+      }
+      
+      for (int it = 0; it < u_point_light_count; it++) {
+        vec3 dir = u_point_pos[it] - p_world_pos;
+        float d = length(dir) * 0.3;
+        float falloff = 3 / (d * d + 1);
+        float alignment = clamp(
+          dot(normalize(p_normal), normalize(dir)),
+          0, 1
+        );
+        intensity += falloff * alignment * u_point_intensity[it];
+      }
+      
+      color = p_color * clamp(intensity, 0, 1);
     }
   """
 
@@ -505,7 +552,9 @@ proc new_render3*(window: Window): Render3 =
   return Render3(
     window: window,
     shader_prog: shader_prog,
-    camera: new_camera()
+    camera: new_camera(),
+    max_point_lights: 32,
+    max_sun_lights: 1
   )
 
 proc new_buffer(mesh: Mesh, prog: ShaderProgram): Buffer =
@@ -562,6 +611,20 @@ proc add*(ren: var Render3,
     color: color
   ))
 
+proc add*(ren: var Render3,
+          light: Light) =
+  case light.kind:
+    of LightSun:
+      if ren.sun_lights.len >= ren.max_sun_lights:
+        raise RenderError(msg: "Exceeded sun light limit")
+      ren.sun_lights.add(light)
+    of LightPoint:
+      if ren.point_lights.len >= ren.max_point_lights:
+        raise RenderError(msg: "Exceeded point light limit")
+      ren.point_lights.add(light)
+    of LightAmbient:
+      ren.ambient_light = light.ambient
+
 proc render*(ren: var Render3,
              stats: var Stats) =
   stats.reset()
@@ -580,13 +643,25 @@ proc render*(ren: var Render3,
     gl_bind_buffer(GL_ARRAY_BUFFER, buffer.buffer)
     gl_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, buffer.indices)
 
+    for it, light in ren.point_lights:
+      buffer.prog.uniform("u_point_pos[" & $it & "]", light.pos)
+      buffer.prog.uniform("u_point_intensity[" & $it & "]", light.intensity)
+    buffer.prog.uniform("u_point_light_count", ren.point_lights.len.int)
+
+    for it, light in ren.sun_lights:
+      buffer.prog.uniform("u_suns[" & $it & "]", light.direction)
+    buffer.prog.uniform("u_sun_light_count", ren.sun_lights.len.int)
+    buffer.prog.uniform("u_light_ratio", 0.2)
+    
+    buffer.prog.uniform("u_ambient_light", ren.ambient_light)
+
     var it = 0
     while it < buffer.instances.len:
       buffer.prog.uniform("u_camera_mat",
         ren.camera.make_matrix(ren.window.size)
       )
       buffer.prog.uniform("u_light_dir", Vec3(x: 0.5, y: 0.2, z: 1).normalize())
-      
+  
       var count = 0
       for it2 in 0..<min(buffer.batch_size, buffer.instances.len - it):
         let inst = buffer.instances[it2 + it]
@@ -603,6 +678,10 @@ proc render*(ren: var Render3,
       it += buffer.batch_size
       
     ren.meshes[mesh].instances = @[]
+  
+  ren.point_lights = @[]
+  ren.sun_lights = @[]
+  ren.ambient_light = 0
 
 proc render*(ren: var Render3) =
   var stats = Stats()
