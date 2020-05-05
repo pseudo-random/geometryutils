@@ -3,3 +3,4 @@ test_all
 .temp*
 test.svg
 oldtest.nim
+examples/cube
