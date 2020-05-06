@@ -278,7 +278,7 @@ type
       of EventResize:
         size*: Index2
       of EventKeyDown, EventKeyUp:
-        keycode: int
+        keycode*: int
       of EventWheel:
         delta*: Index2
       else: discard
@@ -732,3 +732,43 @@ proc update*(cont: OrbitCameraController,
     rot_y = new_rotate_y_mat4(cont.y)
     rot_x = new_rotate_x_mat4(cont.x)
   camera.mat = translate * rot_x * rot_y
+
+type
+  ModelCameraController* = object
+    rot: Quat
+    zoom: float64
+    rotation_speed: float64
+    zoom_speed: float64
+
+proc new_model_camera_controller*(zoom: float64 = 10,
+                                  rotation_speed: float64 = 0.5,
+                                  zoom_speed: float64 = 1.2): ModelCameraController =
+  return ModelCameraController(
+    rot: new_quat(),
+    zoom: zoom,
+    zoom_speed: zoom_speed,
+    rotation_speed: rotation_speed
+  )
+
+proc process*(cont: var ModelCameraController,
+              evt: Event) =
+  case evt.kind:
+    of EventMove:
+      if evt.buttons[0]:
+        let delta = evt.pos - evt.prev_pos
+        cont.rot = new_quat(Vec3(y: 1), Deg(delta.x) * cont.rotation_speed) * cont.rot
+        cont.rot = new_quat(Vec3(x: 1), Deg(delta.y) * cont.rotation_speed) * cont.rot
+    of EventWheel:
+      if evt.delta.y < 0:
+        cont.zoom *= cont.zoom_speed
+      else:
+        cont.zoom /= cont.zoom_speed
+    else: discard
+
+proc update*(cont: ModelCameraController,
+             camera: var Camera) =
+  let
+    translate = new_translate_mat4(Vec3(z: -cont.zoom))
+    rot = new_rotate_mat4(cont.rot)
+  camera.mat = translate * rot
+
