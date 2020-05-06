@@ -615,9 +615,10 @@ proc add*(ren: var Render3,
           mesh: Mesh,
           pos: Vec3 = Vec3(),
           rot: Quat = new_quat(),
+          scale: float64 = 1,
           color: Color = grey(0.8)) =
   ren.add(mesh, Instance(
-    mat: new_translate_mat4(pos) * new_rotate_mat4(rot),
+    mat: new_translate_mat4(pos) * new_rotate_mat4(rot) * new_scale_mat4(scale),
     color: color
   ))
 

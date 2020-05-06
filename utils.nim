@@ -437,6 +437,14 @@ proc new_rotate_mat4*(quat: Quat): Mat4 =
     0, 0, 0, 1
   ])
 
+proc new_scale_mat4*(scale: float64): Mat4 =
+  return Mat4(data: [
+    scale, 0, 0, 0,
+    0, scale, 0, 0,
+    0, 0, scale, 0,
+    0, 0, 0, 1
+  ])
+
 proc new_perspective_mat4*(fov: Rad, aspect, near, far: float64): Mat4 =
   return Mat4(data: [
     1 / (aspect * tan(fov / 2)), 0, 0, 0,
