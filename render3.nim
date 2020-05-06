@@ -305,6 +305,16 @@ proc new_window*(title: string = "Window",
     discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4)
     discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MINOR_VERSION, 5)
 
+    discard sdl2.gl_set_attribute(SDL_GL_RED_SIZE, 8)
+    discard sdl2.gl_set_attribute(SDL_GL_GREEN_SIZE, 8)
+    discard sdl2.gl_set_attribute(SDL_GL_BLUE_SIZE, 8)
+    discard sdl2.gl_set_attribute(SDL_GL_DEPTH_SIZE, 24)
+    
+    discard sdl2.gl_set_attribute(SDL_GL_DOUBLEBUFFER, 1)
+    discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, 1)
+    discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, 16)
+    
+  
   var flags = SDL_WINDOW_OPENGL
   if resizable:
     flags = flags or SDL_WINDOW_RESIZABLE
