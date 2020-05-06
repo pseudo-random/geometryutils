@@ -106,6 +106,14 @@ proc new_cube_mesh*(pos, size: Vec3): Mesh =
   result = Mesh()
   result.add_cube(pos, size)
 
+proc apply*(vert: var Vertex, mat: Mat4) =
+  vert.pos = xyz(mat * new_vec4(vert.pos, 1))
+  vert.normal = normalize(xyz(mat * new_vec4(vert.normal, 1)))
+
+proc apply*(mesh: Mesh, mat: Mat4) =
+  for it in low(mesh.verts)..high(mesh.verts):
+    mesh.verts[it].apply(mat)
+
 proc add(data: var seq[GLfloat], vec: Vec3) =
   data.add(vec.x.GLfloat)
   data.add(vec.y.GLfloat)
