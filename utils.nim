@@ -257,6 +257,9 @@ proc new_rand_vec3*(range: HSlice[float64, float64]): Vec3 =
     z: rand(range)
   )
 
+proc new_vec3*(value: float64): Vec3 =
+  Vec3(x: value, y: value, z: value)
+
 proc new_vec3*(vec: Vec2, z: float64): Vec3 =
   Vec3(x: vec.x, y: vec.y, z: z)
 

@@ -129,6 +129,70 @@ proc index_data(mesh: Mesh): seq[GLuint] =
     for idx in tri:
       result.add(idx.GLuint)
 
+proc render_size(mesh: Mesh): GLsizei = GLSizei(mesh.tris.len * 3)
+proc render_type(mesh: Mesh): GLenum = GL_TRIANGLES
+
+type
+  WireframeVertex* = object
+    pos: Vec3
+
+  Wireframe* = ref object
+    verts*: seq[WireframeVertex]
+    lines*: seq[array[2, int]]
+
+proc to_wireframe*(mesh: Mesh): Wireframe =
+  result = Wireframe()
+  for vert in mesh.verts:
+    result.verts.add(WireframeVertex(pos: vert.pos))
+  
+  for tri in mesh.tris:
+    for it in 0..<3:
+      let it2 = (it + 1) mod 3
+      result.lines.add([tri[it], tri[it2]])
+
+proc add_line*(wireframe: Wireframe, a, b: Vec3) =
+  wireframe.verts.add(WireframeVertex(pos: a))
+  wireframe.verts.add(WireframeVertex(pos: b))
+
+  wireframe.lines.add([
+    wireframe.verts.len - 2,
+    wireframe.verts.len - 1
+  ])
+
+proc add_cube*(wireframe: Wireframe, pos, size: Vec3) =
+  let idx = wireframe.verts.len
+  for x in 0..1:  
+    for y in 0..1:
+      for z in 0..1:
+        wireframe.verts.add(WireframeVertex(pos:
+          pos + Vec3(x: x.float64, y: y.float64, z: z.float64) * size
+        ))
+
+  wireframe.lines &= [
+    [0, 1], [2, 3], [4, 5], [6, 7],
+    [0, 4], [2, 6], [1, 5], [3, 7],
+    [0, 2], [4, 6], [5, 7], [1, 3]
+  ]
+  
+proc new_cube_wireframe*(pos, size: Vec3): Wireframe =
+  result = Wireframe()
+  result.add_cube(pos, size)
+
+proc vert_data(wireframe: Wireframe): seq[GLfloat] =
+  for vertex in wireframe.verts:
+    result.add(vertex.pos)
+
+proc index_data(wireframe: Wireframe): seq[GLuint] =
+  for line in wireframe.lines:
+    for idx in line:
+      result.add(idx.GLuint)
+
+proc render_size(wireframe: Wireframe): GLsizei =
+  GLSizei(wireframe.lines.len * 2)
+
+proc render_type(wireframe: Wireframe): GLenum = GL_LINES
+
+
 type
   ShaderKind* = enum ShaderVertex, ShaderFragment
   Shader* = object
@@ -137,8 +201,15 @@ type
   
   ShaderProgram* = object
     id: GLuint
+    attribs: seq[Attribute]
   
   ShaderError* = ref object of Exception
+
+  AttribKind* = enum AttribFloat, AttribInt
+  Attribute* = object
+    name*: string
+    count*: int
+    kind*: AttribKind
 
 proc to_gl(kind: ShaderKind): GLenum =
   case kind:
@@ -162,7 +233,7 @@ proc compile_shader*(kind: ShaderKind, source: string): Shader =
   
   return Shader(kind: kind, id: id)
 
-proc link_program*(shaders: openArray[Shader]): ShaderProgram =
+proc link_program*(shaders: openArray[Shader], attribs: seq[Attribute]): ShaderProgram =
   let id = gl_create_program()
   for shader in shaders:
     gl_attach_shader(id, shader.id)
@@ -178,7 +249,7 @@ proc link_program*(shaders: openArray[Shader]): ShaderProgram =
     gl_get_program_info_log(id, info_log_len, actual_len.addr, info_log.cstring)
     raise ShaderError(msg: info_log)
   
-  return ShaderProgram(id: id)
+  return ShaderProgram(id: id, attribs: attribs)
 
 proc use*(prog: ShaderProgram) =
   gl_use_program(prog.id)
@@ -229,13 +300,6 @@ proc uniform*(prog: ShaderProgram, name: string, value: Mat4) =
     data[it] = GLfloat(x)
   gl_uniform_matrix4fv(loc, 1, true, data[0].addr)
 
-type
-  AttribKind* = enum AttribFloat, AttribInt
-  Attribute* = object
-    name*: string
-    count*: int
-    kind*: AttribKind
-
 proc size*(attrib: Attribute): int =
   case attrib.kind:
     of AttribFloat: return attrib.count * sizeof GLfloat
@@ -246,14 +310,13 @@ proc to_gl(kind: AttribKind): GLenum =
     of AttribFloat: return cGL_FLOAT
     of AttribInt: return cGL_INT
 
-proc config_attribs*(prog: ShaderProgram,
-                     attribs: openArray[Attribute]) =
+proc config_attribs*(prog: ShaderProgram) =
   var stride = 0
-  for attrib in attribs:
+  for attrib in prog.attribs:
     stride += attrib.size()
   
   var offset = 0
-  for attrib in attribs:
+  for attrib in prog.attribs:
     let id = gl_get_attrib_location(prog.id, attrib.name.cstring)
     if id < 0:
       raise ShaderError(msg: "Could not find attribute: " & attrib.name)
@@ -408,8 +471,8 @@ type
     mat*: Mat4
     color*: Color
 
-  Buffer = object
-    mesh: Mesh
+  Batch[T] = object
+    render_obj: T
     
     attribs: GLuint
     buffer: GLuint
@@ -440,7 +503,10 @@ type
     window: Window
   
     shader_prog: ShaderProgram
-    meshes: Table[Mesh, Buffer]
+    wireframe_shader_prog: ShaderProgram
+    
+    meshes: Table[Mesh, Batch[Mesh]]
+    wireframes: Table[Wireframe, Batch[Wireframe]]
     
     camera*: Camera
     max_point_lights: int
@@ -473,11 +539,11 @@ proc average_fps*(stats: Stats): float64 =
     sum += measurement
   return sum / float64(stats.recent_fps.len)
 
-proc hash(mesh: Mesh): Hash =
-  return !$ mesh[].addr.hash()
+proc hash(mesh: Mesh): Hash = return !$ mesh[].addr.hash()
+proc `==`(a, b: Mesh): bool = a[].addr == b[].addr
 
-proc `==`(a, b: Mesh): bool =
-  a[].addr == b[].addr
+proc hash(wireframe: Wireframe): Hash = return !$ wireframe[].addr.hash()
+proc `==`(a, b: Wireframe): bool = a[].addr == b[].addr
 
 proc make_matrix(camera: Camera, size: Index2): Mat4 =
   let perspective = new_perspective_mat4(
@@ -558,11 +624,63 @@ const
     }
   """
 
+const
+  WIREFRAME_VERTEX_SHADER_SOURCE = """
+    #version 450 core
+    
+    in vec3 pos;
+    
+    out vec4 p_color;
+    out vec3 p_world_pos;
+    
+    uniform mat4 u_camera_mat;
+    uniform mat4 u_model_mat[128];
+    uniform vec4 u_color[128];
+    
+    void main() {
+      p_color = u_color[gl_InstanceID];
+      vec4 world_pos = u_model_mat[gl_InstanceID] * vec4(pos, 1);
+      p_world_pos = world_pos.xyz;
+      gl_Position = u_camera_mat * world_pos;
+    }
+  """
+  WIREFRAME_FRAGMENT_SHADER_SOURCE = """
+    #version 450 core
+  
+    in vec4 p_color;
+    in vec3 p_world_pos;
+    
+    out vec4 color;
+    
+    uniform vec4 u_color[128];
+    
+    uniform vec3 u_suns[1];
+    uniform int u_sun_light_count;
+    uniform vec3 u_point_pos[32];
+    uniform float u_point_intensity[32];
+    uniform int u_point_light_count;
+    uniform float u_ambient_light;
+    
+    void main() {
+      color = p_color;
+    }
+  """
+
 proc new_render3*(window: Window): Render3 =
-  let shader_prog = link_program([
-    compile_shader(ShaderVertex, VERTEX_SHADER_SOURCE),
-    compile_shader(ShaderFragment, FRAGMENT_SHADER_SOURCE)
-  ])
+  let
+    shader_prog = link_program([
+      compile_shader(ShaderVertex, VERTEX_SHADER_SOURCE),
+      compile_shader(ShaderFragment, FRAGMENT_SHADER_SOURCE)
+    ], @[
+      Attribute(name: "pos", count: 3, kind: AttribFloat),
+      Attribute(name: "normal", count: 3, kind: AttribFloat)
+    ])
+    wireframe_shader_prog = link_program([
+      compile_shader(ShaderVertex, WIREFRAME_VERTEX_SHADER_SOURCE),
+      compile_shader(ShaderFragment, WIREFRAME_FRAGMENT_SHADER_SOURCE)
+    ], @[
+      Attribute(name: "pos", count: 3, kind: AttribFloat)
+    ])
   
   gl_enable(GL_DEPTH_TEST)
   gl_enable(GL_CULL_FACE)
@@ -570,12 +688,13 @@ proc new_render3*(window: Window): Render3 =
   return Render3(
     window: window,
     shader_prog: shader_prog,
+    wireframe_shader_prog: wireframe_shader_prog,
     camera: new_camera(),
     max_point_lights: 32,
     max_sun_lights: 1
   )
 
-proc new_buffer(mesh: Mesh, prog: ShaderProgram): Buffer =
+proc new_batch[T](render_obj: T, prog: ShaderProgram): Batch[T] =
   var
     attribs: GLuint
     buffer: GLuint
@@ -584,7 +703,7 @@ proc new_buffer(mesh: Mesh, prog: ShaderProgram): Buffer =
   gl_bind_vertex_array(attribs)
 
   gl_gen_buffers(1, buffer.addr)
-  var data = mesh.vert_data()
+  var data = render_obj.vert_data()
   gl_bind_buffer(GL_ARRAY_BUFFER, buffer)
   gl_buffer_data(GL_ARRAY_BUFFER,
     data.len * sizeof GLfloat, data[0].addr,
@@ -592,20 +711,17 @@ proc new_buffer(mesh: Mesh, prog: ShaderProgram): Buffer =
   )
   
   gl_gen_buffers(1, indices.addr)
-  var elems = mesh.index_data()
+  var elems = render_obj.index_data()
   gl_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, indices)
   gl_buffer_data(GL_ELEMENT_ARRAY_BUFFER,
     elems.len * sizeof GLuint, elems[0].addr,
     GL_STATIC_DRAW
   )
 
-  prog.config_attribs([
-    Attribute(name: "pos", count: 3, kind: AttribFloat),
-    Attribute(name: "normal", count: 3, kind: AttribFloat)
-  ])
+  prog.config_attribs()
 
-  return Buffer(
-    mesh: mesh,
+  return Batch[T](
+    render_obj: render_obj,
     buffer: buffer,
     attribs: attribs,
     indices: indices,
@@ -615,17 +731,23 @@ proc new_buffer(mesh: Mesh, prog: ShaderProgram): Buffer =
 
 proc add*(ren: var Render3, mesh: Mesh, inst: Instance) =
   if mesh notin ren.meshes:
-    ren.meshes[mesh] = new_buffer(mesh, ren.shader_prog)
+    ren.meshes[mesh] = new_batch[Mesh](mesh, ren.shader_prog)
 
   ren.meshes[mesh].instances.add(inst)
 
-proc add*(ren: var Render3,
-          mesh: Mesh,
-          pos: Vec3 = Vec3(),
-          rot: Quat = new_quat(),
-          scale: float64 = 1,
-          color: Color = grey(0.8)) =
-  ren.add(mesh, Instance(
+proc add*(ren: var Render3, wireframe: Wireframe, inst: Instance) =
+  if wireframe notin ren.wireframes:
+    ren.wireframes[wireframe] = new_batch[Wireframe](wireframe, ren.wireframe_shader_prog)
+
+  ren.wireframes[wireframe].instances.add(inst)
+
+proc add*[T: Wireframe | Mesh](ren: var Render3,
+                               render_obj: T,
+                               pos: Vec3 = Vec3(),
+                               rot: Quat = new_quat(),
+                               scale: float64 = 1,
+                               color: Color = grey(0.8)) =
+  ren.add(render_obj, Instance(
     mat: new_translate_mat4(pos) * new_rotate_mat4(rot) * new_scale_mat4(scale),
     color: color
   ))
@@ -644,6 +766,53 @@ proc add*(ren: var Render3,
     of LightAmbient:
       ren.ambient_light = light.ambient
 
+proc render[T](ren: var Render3,
+               batch: var Batch[T],
+               stats: var Stats) =
+  gl_bind_vertex_array(batch.attribs)
+  batch.prog.use()
+  
+  gl_bind_buffer(GL_ARRAY_BUFFER, batch.buffer)
+  gl_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, batch.indices)
+
+  for it, light in ren.point_lights:
+    batch.prog.uniform("u_point_pos[" & $it & "]", light.pos)
+    batch.prog.uniform("u_point_intensity[" & $it & "]", light.intensity)
+  batch.prog.uniform("u_point_light_count", ren.point_lights.len.int)
+
+  for it, light in ren.sun_lights:
+    batch.prog.uniform("u_suns[" & $it & "]", light.direction)
+  batch.prog.uniform("u_sun_light_count", ren.sun_lights.len.int)
+  batch.prog.uniform("u_light_ratio", 0.2)
+  
+  batch.prog.uniform("u_ambient_light", ren.ambient_light)
+
+  var it = 0
+  while it < batch.instances.len:
+    batch.prog.uniform("u_camera_mat",
+      ren.camera.make_matrix(ren.window.size)
+    )
+    batch.prog.uniform("u_light_dir", Vec3(x: 0.5, y: 0.2, z: 1).normalize())
+
+    var count = 0
+    for it2 in 0..<min(batch.batch_size, batch.instances.len - it):
+      let inst = batch.instances[it2 + it]
+      batch.prog.uniform("u_color[" & $it2 & "]", inst.color)
+      batch.prog.uniform("u_model_mat[" & $it2 & "]", inst.mat)
+      count += 1
+    
+    gl_draw_elements_instanced(
+      batch.render_obj.render_type(),
+      batch.render_obj.render_size(),
+      GL_UNSIGNED_INT, nil, GLsizei(count)
+    )
+    stats.triangles += batch.render_obj.render_size() div 3 * count
+    stats.batches += 1
+    stats.instances += count
+    it += batch.batch_size
+  
+  batch.instances = @[]
+
 proc render*(ren: var Render3,
              stats: var Stats) =
   stats.reset()
@@ -655,48 +824,11 @@ proc render*(ren: var Render3,
     stats.ptime = cur_time
     stats.push_fps(1 / dtime)
   
-  for mesh, buffer in ren.meshes:
-    gl_bind_vertex_array(buffer.attribs)
-    buffer.prog.use()
-    
-    gl_bind_buffer(GL_ARRAY_BUFFER, buffer.buffer)
-    gl_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, buffer.indices)
-
-    for it, light in ren.point_lights:
-      buffer.prog.uniform("u_point_pos[" & $it & "]", light.pos)
-      buffer.prog.uniform("u_point_intensity[" & $it & "]", light.intensity)
-    buffer.prog.uniform("u_point_light_count", ren.point_lights.len.int)
-
-    for it, light in ren.sun_lights:
-      buffer.prog.uniform("u_suns[" & $it & "]", light.direction)
-    buffer.prog.uniform("u_sun_light_count", ren.sun_lights.len.int)
-    buffer.prog.uniform("u_light_ratio", 0.2)
-    
-    buffer.prog.uniform("u_ambient_light", ren.ambient_light)
-
-    var it = 0
-    while it < buffer.instances.len:
-      buffer.prog.uniform("u_camera_mat",
-        ren.camera.make_matrix(ren.window.size)
-      )
-      buffer.prog.uniform("u_light_dir", Vec3(x: 0.5, y: 0.2, z: 1).normalize())
+  for mesh, batch in ren.meshes:
+    ren.render(ren.meshes[mesh], stats)
   
-      var count = 0
-      for it2 in 0..<min(buffer.batch_size, buffer.instances.len - it):
-        let inst = buffer.instances[it2 + it]
-        buffer.prog.uniform("u_color[" & $it2 & "]", inst.color)
-        buffer.prog.uniform("u_model_mat[" & $it2 & "]", inst.mat)
-        count += 1
-      
-      gl_draw_elements_instanced(GL_TRIANGLES,
-        GLsizei(mesh.tris.len * 3), GL_UNSIGNED_INT, nil, GLsizei(count)
-      )
-      stats.triangles += mesh.tris.len * count
-      stats.batches += 1
-      stats.instances += count
-      it += buffer.batch_size
-      
-    ren.meshes[mesh].instances = @[]
+  for wireframe, batch in ren.wireframes:
+    ren.render(ren.wireframes[wireframe], stats)
   
   ren.point_lights = @[]
   ren.sun_lights = @[]
