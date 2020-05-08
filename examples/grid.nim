@@ -1,5 +1,5 @@
 import times
-import ../utils, ../render3
+import ../utils, ../window, ../render3
 
 proc new_grid_element(size: float64): Wireframe =
   result = Wireframe()
@@ -16,20 +16,20 @@ proc new_grid_element(size: float64): Wireframe =
     )
 
 let
-  window = new_window("Grid", resizable=true)
+  win = new_window("Grid", resizable=true)
   grid_element = new_grid_element(10)
   cube = new_cube_mesh(new_vec3(-1), new_vec3(2))
   cube_wireframe = cube.to_wireframe()
   start = get_time()
 
 var
-  ren = new_render3(window)
+  ren = new_render3(win)
   cont = new_orbit_camera_controller()
   show_wireframe = false
   is_running = true
 
 while is_running:
-  for event in window.poll():
+  for event in win.poll():
     case event.kind:
       of EventQuit:
         is_running = false
@@ -60,4 +60,4 @@ while is_running:
     direction: Vec3(x: 1, y: 0.3, z: 0.8)
   ))
   ren.render()
-  window.swap()
+  win.swap()

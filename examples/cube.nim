@@ -1,7 +1,7 @@
-import ../utils, ../render3
+import ../utils, ../window, ../render3
 
 let
-  window = new_window("Cube", resizable=true)
+  win = new_window("Cube", resizable=true)
   cube = new_cube_mesh(
     Vec3(x: -1, y: -1, z: -1),
     Vec3(x: 2, y: 2, z: 2)
@@ -9,12 +9,12 @@ let
 
 var
   cont = new_orbit_camera_controller()
-  ren = new_render3(window)
+  ren = new_render3(win)
   stats = Stats()
   is_running = true
 
 while is_running:
-  for event in window.poll():
+  for event in win.poll():
     case event.kind:
       of EventQuit:
         is_running = false
@@ -38,6 +38,6 @@ while is_running:
     ambient: 0.2
   ))
   ren.render(stats)
-  window.swap()
+  win.swap()
 
   echo stats.average_fps()
