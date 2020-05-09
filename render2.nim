@@ -103,7 +103,7 @@ type
     elements: GLuint
 
   Render2* = object
-    window: Window
+    window: BaseWindow
     batches: array[BatchKind, Batch]
     prev_batch: BatchKind
     
@@ -215,7 +215,7 @@ proc add(batch: var Batch,
   for index in indices:
     batch.indices.add(index + GLuint(idx))
 
-proc new_render2*(window: Window): Render2 =
+proc new_render2*(window: BaseWindow): Render2 =
   let 
     prog_solid = link_program([
       compile_shader(ShaderVertex, SOLID_VERT_SHADER_SOURCE),

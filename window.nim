@@ -47,14 +47,14 @@ type
         delta*: Index2
       else: discard
 
-  Window* = ref object
-    win: WindowPtr
+  BaseWindow* = ref object of RootObj
     size*: Index2
-    
-    events: seq[Event]
     pos*: Index2
     buttons*: array[3, bool]
-    
+  
+  Window* = ref object of BaseWindow
+    win: WindowPtr
+    events: seq[Event]
 
 proc new_window*(title: string = "Window",
                  size: Index2 = Index2(x: 640, y: 480),

@@ -228,7 +228,7 @@ type
         ambient*: float64
 
   Render3* = object
-    window: Window
+    window: BaseWindow
   
     shader_prog: ShaderProgram
     wireframe_shader_prog: ShaderProgram
@@ -394,7 +394,7 @@ const
     }
   """
 
-proc new_render3*(window: Window): Render3 =
+proc new_render3*(window: BaseWindow): Render3 =
   let
     shader_prog = link_program([
       compile_shader(ShaderVertex, VERTEX_SHADER_SOURCE),
