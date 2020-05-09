@@ -159,3 +159,25 @@ proc swap*(window: Window) =
   ## Swap window
   window.win.gl_swap_window()
 
+proc title*(window: Window): string =
+  $window.win.get_title()
+
+proc `title=`*(window: Window, title: string) =
+  window.win.set_title(title)
+
+proc resize*(window: Window, size: Index2) =
+  window.size = size
+  window.win.set_size(size.x.cint, size.y.cint)
+  gl_viewport(0, 0, size.x.cint, size.y.cint)
+
+proc move*(window: Window, pos: Index2) =
+  window.win.set_position(pos.x.cint, pos.y.cint)
+
+proc minimize*(window: Window) =
+  window.win.minimize_window()
+
+proc maximize*(window: Window) =
+  window.win.maximize_window()
+
+proc restore*(window: Window) =
+  window.win.restore_window()
