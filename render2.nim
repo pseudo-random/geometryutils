@@ -23,8 +23,107 @@
 import strutils, sequtils, sugar, times
 import tables, hashes, times, random
 import sdl2 except Color, rgb, Event
+import sdl2/ttf
 import opengl
 import utils, window, shader
+
+type
+  TextError* = ref object of Exception
+
+  Font* = ref object
+    size: int
+    path: string
+    font: FontPtr
+    cache: Table[Color, Table[string, Texture]]
+  
+  Texture* = object
+    id*: GLuint
+    size*: Index2
+
+proc hash(color: Color): Hash =
+  result = color.r.hash()
+  result = result !& color.g.hash()
+  result = result !& color.b.hash()
+  result = result !& color.a.hash()
+  return !$ result
+
+proc `==`*(a, b: Font): bool =
+  a.path == b.path and a.size == b.size
+
+proc load_font*(path: string, size: int): Font =
+  if not ttf_was_init():
+    echo "Initialize TTF"
+    ttf.ttf_init()
+
+  let font = open_font(path.cstring, size.cint)
+  if font == nil:
+    raise TextError(msg: "Could not load font\"" & path & "\" of size " & $size)
+  return Font(font: font, size: size, path: path)
+
+proc render_static*(font: Font,
+                    text: string,
+                    color: Color = grey(0)): Texture =
+  if color in font.cache and
+     text in font.cache[color]:
+    return font.cache[color][text]
+
+  if color notin font.cache:
+    font.cache[color] = init_table[string, Texture]()
+  
+  var sdl_color: sdl2.Color
+  sdl_color.r = uint8(color.r * 255)
+  sdl_color.g = uint8(color.g * 255)
+  sdl_color.b = uint8(color.b * 255)
+  sdl_color.a = uint8(color.a * 255)
+  
+  let
+    surf = render_text_blended(font.font, text.cstring, sdl_color)
+    mode = GL_RGBA
+  var id: GLuint
+  gl_gen_textures(1, id.addr)
+  gl_bind_texture(GL_TEXTURE_2D, id)
+  gl_tex_image_2d(GL_TEXTURE_2D, 0, mode.GLint, surf.w, surf.h, 0, mode, GL_UNSIGNED_BYTE, surf.pixels)
+  gl_tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+  gl_tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+  gl_bind_texture(GL_TEXTURE_2D, 0)
+  
+  result = Texture(id: id, size: Index2(x: surf.w.int, y: surf.h.int))
+  font.cache[color][text] = result
+
+const
+  TEXTURE_VERT_SHADER_SOURCE = """
+    #version 450 core
+    
+    in vec3 pos;
+    in vec2 uv;
+    in float id;
+    
+    out vec2 p_uv;
+    out float p_id;
+    
+    uniform mat4 u_view_mat;
+
+    void main() {
+      p_id = id;
+      p_uv = uv;
+      gl_Position = u_view_mat * vec4(pos, 1);  
+    }
+  """
+  
+  TEXTURE_FRAG_SHADER_SOURCE = """
+    #version 450 core
+    
+    in float p_id;
+    in vec2 p_uv;
+    
+    out vec4 color;
+    
+    uniform sampler2D u_tex[32];
+  
+    void main() {
+      color = texture(u_tex[int(p_id)], p_uv) + vec4(p_id) * 0.0001;
+    }
+  """
 
 const
   SOLID_VERT_SHADER_SOURCE = """
@@ -90,13 +189,15 @@ const
   """
 
 type
-  BatchKind = enum BatchSolid, BatchEllipse
+  BatchKind = enum BatchSolid, BatchEllipse, BatchTexture
 
   Batch = object
     max_size: int
+    max_textures: int
     prog: ShaderProgram
     indices: seq[GLuint]
     verts: seq[GLfloat]
+    textures: seq[Texture]
     
     attribs: GLuint
     buffer: GLuint
@@ -139,7 +240,7 @@ proc average_fps*(stats: Stats2): float64 =
     sum += fps
   return sum / stats.recent_fps.len.float64
 
-proc new_batch(prog: ShaderProgram, max_size: int): Batch =
+proc new_batch(prog: ShaderProgram, max_size: int, max_textures: int = 0): Batch =
   var
     attribs: GLuint
     buffer: GLuint
@@ -161,12 +262,14 @@ proc new_batch(prog: ShaderProgram, max_size: int): Batch =
     elements: elements,
     buffer: buffer,
     prog: prog,
-    max_size: max_size
+    max_size: max_size,
+    max_textures: max_textures
   )
 
 proc clear(batch: var Batch) =
   batch.verts = @[]
   batch.indices = @[]
+  batch.textures = @[]
 
 proc new_view_mat4(size: Index2): Mat4 =
   return Mat4(data: [
@@ -200,6 +303,11 @@ proc render(batch: var Batch, size: Index2, stats: var Stats2) =
   batch.prog.use()
   batch.prog.uniform("u_view_mat", new_view_mat4(size))
   
+  for id, texture in batch.textures:
+    gl_active_texture(GLenum(GL_TEXTURE0.int64 + id.int64))
+    gl_bind_texture(GL_TEXTURE_2D, texture.id)
+    batch.prog.uniform("u_tex[" & $id & "]", id)
+  
   gl_draw_elements(GL_TRIANGLES, batch.indices.len.GLsizei, GL_UNSIGNED_INT, nil)
   
   stats.drawcalls += 1
@@ -207,6 +315,20 @@ proc render(batch: var Batch, size: Index2, stats: var Stats2) =
   
   batch.clear()
   
+
+proc add(batch: var Batch,
+         textures: seq[Texture],
+         size: Index2,
+         stats: var Stats2): seq[int] =
+  if batch.textures.len + textures.len > batch.max_textures:
+    batch.render(size, stats)
+  for tex in textures:
+    if tex in batch.textures:
+      result.add(batch.textures.find(tex))
+    else:
+      result.add(batch.textures.len)
+      batch.textures.add(tex)
+
 proc add(batch: var Batch,
          verts: seq[GLfloat],
          indices: seq[GLuint]) =
@@ -233,6 +355,15 @@ proc new_render2*(window: BaseWindow): Render2 =
       Attribute(name: "uv", kind: AttribFloat, count: 2),
       Attribute(name: "color", kind: AttribFloat, count: 4)
     ])
+    
+    prog_texture = link_program([
+      compile_shader(ShaderVertex, TEXTURE_VERT_SHADER_SOURCE),
+      compile_shader(ShaderFragment, TEXTURE_FRAG_SHADER_SOURCE)
+    ], @[
+      Attribute(name: "pos", kind: AttribFloat, count: 3),
+      Attribute(name: "uv", kind: AttribFloat, count: 2),
+      Attribute(name: "id", kind: AttribFloat, count: 1)
+    ])
   
   gl_enable(GL_BLEND)
   gl_blend_func(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -244,18 +375,30 @@ proc new_render2*(window: BaseWindow): Render2 =
     stroke_width: 1,
     batches: [
       new_batch(prog_solid, 1024),
-      new_batch(prog_ellipse, 1024)
+      new_batch(prog_ellipse, 1024),
+      new_batch(prog_texture, 1024, max_textures=32)
     ]
   )
+
+proc flush*(ren: var Render2) =
+  ren.batches[ren.prev_batch].render(ren.window.size, ren.stats)
 
 proc add(ren: var Render2, 
          batch_kind: BatchKind,
          verts: seq[GLfloat],
          indices: seq[GLuint]) =
   if ren.prev_batch != batch_kind:
-    ren.batches[ren.prev_batch].render(ren.window.size, ren.stats)
+    ren.flush()
     ren.prev_batch = batch_kind
   ren.batches[batch_kind].add(verts, indices) 
+
+proc add(ren: var Render2,
+         batch_kind: BatchKind,
+         textures: seq[Texture]): seq[int] =
+  if ren.prev_batch != batch_kind:
+    ren.flush()
+    ren.prev_batch = batch_kind  
+  return ren.batches[batch_kind].add(textures, ren.window.size, ren.stats)
 
 proc background*(ren: var Render2, color: Color) =
   for batch in ren.batches.mitems:
@@ -406,6 +549,19 @@ proc ellipse*(ren: var Render2, pos, size: Vec2) =
 
 proc circle*(ren: var Render2, pos: Vec2, radius: float64) =
   ren.ellipse(pos, Vec2(x: radius, y: radius))
+
+proc add*(ren: var Render2, texture: Texture, pos: Vec2, size: Vec2) =
+  let idx = ren.add(BatchTexture, @[texture])
+  var verts: seq[GLfloat] = @[]
+  for uv in [Vec2(), Vec2(x: 1), Vec2(y: 1), Vec2(x: 1, y: 1)]:
+    verts.add(new_vec3(pos + size * uv, 0))
+    verts.add(uv)
+    verts.add(GLfloat(idx[0]))
+  
+  ren.add(BatchTexture, verts, @[GLuint 0, 1, 3, 2, 0, 3])
+
+proc add*(ren: var Render2, texture: Texture, pos: Vec2) =
+  ren.add(texture, pos, texture.size.to_vec2())
 
 proc render*(ren: var Render2, stats: var Stats2) =
   block:

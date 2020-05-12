@@ -3,6 +3,8 @@ test_all
 .temp*
 test.svg
 oldtest.nim
+examples/assets/
 examples/cube
 examples/grid
 examples/draw
+examples/text
