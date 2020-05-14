@@ -192,6 +192,14 @@ proc render_size(wireframe: Wireframe): GLsizei =
 
 proc render_type(wireframe: Wireframe): GLenum = GL_LINES
 
+proc clear*(wireframe: Wireframe) =
+  wireframe.verts = @[]
+  wireframe.lines = @[]
+
+proc clear*(mesh: Mesh) =
+  mesh.verts = @[]
+  mesh.tris = @[]
+
 type
   RenderError* = ref object of Exception
 
@@ -422,6 +430,25 @@ proc new_render3*(window: BaseWindow): Render3 =
     max_sun_lights: 1
   )
 
+proc update[T](batch: Batch[T]) =
+  var data = batch.render_obj.vert_data()
+  if data.len == 0:
+    return
+  gl_bind_buffer(GL_ARRAY_BUFFER, batch.buffer)
+  gl_buffer_data(GL_ARRAY_BUFFER,
+    data.len * sizeof GLfloat, data[0].addr,
+    GL_STATIC_DRAW
+  )
+  
+  var elems = batch.render_obj.index_data()
+  if elems.len == 0:
+    return
+  gl_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, batch.indices)
+  gl_buffer_data(GL_ELEMENT_ARRAY_BUFFER,
+    elems.len * sizeof GLuint, elems[0].addr,
+    GL_STATIC_DRAW
+  )
+
 proc new_batch[T](render_obj: T, prog: ShaderProgram): Batch[T] =
   var
     attribs: GLuint
@@ -431,24 +458,13 @@ proc new_batch[T](render_obj: T, prog: ShaderProgram): Batch[T] =
   gl_bind_vertex_array(attribs)
 
   gl_gen_buffers(1, buffer.addr)
-  var data = render_obj.vert_data()
-  gl_bind_buffer(GL_ARRAY_BUFFER, buffer)
-  gl_buffer_data(GL_ARRAY_BUFFER,
-    data.len * sizeof GLfloat, data[0].addr,
-    GL_STATIC_DRAW
-  )
-  
   gl_gen_buffers(1, indices.addr)
-  var elems = render_obj.index_data()
+  gl_bind_buffer(GL_ARRAY_BUFFER, buffer)
   gl_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, indices)
-  gl_buffer_data(GL_ELEMENT_ARRAY_BUFFER,
-    elems.len * sizeof GLuint, elems[0].addr,
-    GL_STATIC_DRAW
-  )
 
   prog.config_attribs()
 
-  return Batch[T](
+  result = Batch[T](
     render_obj: render_obj,
     buffer: buffer,
     attribs: attribs,
@@ -456,6 +472,7 @@ proc new_batch[T](render_obj: T, prog: ShaderProgram): Batch[T] =
     prog: prog,
     batch_size: 128
   )
+  result.update()
 
 proc add*(ren: var Render3, mesh: Mesh, inst: Instance) =
   if mesh notin ren.meshes:
@@ -468,6 +485,16 @@ proc add*(ren: var Render3, wireframe: Wireframe, inst: Instance) =
     ren.wireframes[wireframe] = new_batch[Wireframe](wireframe, ren.wireframe_shader_prog)
 
   ren.wireframes[wireframe].instances.add(inst)
+
+proc update*(ren: var Render3, wireframe: Wireframe) =
+  if wireframe notin ren.wireframes:
+    return
+  ren.wireframes[wireframe].update()
+
+proc update*(ren: var Render3, mesh: Mesh) =
+  if mesh notin ren.meshes:
+    return
+  ren.meshes[mesh].update()
 
 proc add*[T: Wireframe | Mesh](ren: var Render3,
                                render_obj: T,
@@ -577,23 +604,26 @@ type
     zoom*: float64
     zoom_speed*: float64
     rotation_speed*: float64
+    button*: range[0..2]
 
 proc new_orbit_camera_controller*(zoom: float64 = 10,
                                   rotation_speed: float64 = 0.5,
-                                  zoom_speed: float64 = 1.2): OrbitCameraController =
+                                  zoom_speed: float64 = 1.2,
+                                  button: range[0..2] = 0): OrbitCameraController =
   return OrbitCameraController(
     x: Deg(0),
     y: Deg(0),
     zoom: zoom,
     zoom_speed: zoom_speed,
-    rotation_speed: rotation_speed
+    rotation_speed: rotation_speed,
+    button: button
   )
 
 proc process*(cont: var OrbitCameraController,
               evt: Event) =
   case evt.kind:
     of EventMove:
-      if evt.buttons[0]:
+      if evt.buttons[cont.button]:
         let delta = evt.pos - evt.prev_pos
         cont.y += Deg(delta.x) * cont.rotation_speed
         cont.x += Deg(delta.y) * cont.rotation_speed
