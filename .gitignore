@@ -8,3 +8,5 @@ examples/cube
 examples/grid
 examples/draw
 examples/text
+examples/serialize_example
+examples/data.bin
