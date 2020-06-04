@@ -108,7 +108,7 @@ proc new_cube_mesh*(pos, size: Vec3): Mesh =
 
 proc apply*(vert: var Vertex, mat: Mat4) =
   vert.pos = xyz(mat * new_vec4(vert.pos, 1))
-  vert.normal = normalize(xyz(mat * new_vec4(vert.normal, 1)))
+  vert.normal = normalize(xyz(mat * new_vec4(vert.normal, 0)))
 
 proc apply*(mesh: Mesh, mat: Mat4) =
   for it in low(mesh.verts)..high(mesh.verts):
@@ -598,7 +598,7 @@ proc background*(render: Render3, color: Color) =
   gl_clear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
 type
-  OrbitCameraController = object
+  OrbitCameraController* = object
     y*: Deg
     x*: Deg
     zoom*: float64

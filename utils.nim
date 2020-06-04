@@ -344,6 +344,72 @@ proc `*=`*(a: var Quat, b: Quat) =
   a = a * b
 
 type
+  Matrix2*[T] = object
+    data*: array[4, T]
+  
+  Mat2* = Matrix2[float64]
+
+proc `[]`*[T](mat: Matrix2[T], x, y: int): T =
+  return mat.data[x + y * 2]
+
+proc `[]=`*[T](mat: var Matrix2[T], x, y: int, value: T) =
+  mat.data[x + y * 2] = value
+
+proc `*`*[T](mat: Matrix2[T], vec: Vector2[T]): Vector2[T] =
+  return Vector2[T](
+    x: mat[0, 0] * vec.x + mat[1, 0] * vec.y,
+    y: mat[0, 1] * vec.x + mat[1, 1] * vec.y
+  )
+
+proc `*`*[T](a, b: Matrix2[T]): Matrix2[T] =
+  for x in 0..<2:
+    for y in 0..<2:
+      var sum = T(0)
+      for it in 0..<2:
+        sum += a[it, y] * b[x, it]
+      result[x, y] = sum
+
+proc new_identity_mat2*(): Mat2 =
+  return Mat2(data: [
+    float64 1, 0,
+    0, 1
+  ])
+
+type
+  Matrix3*[T] = object
+    data*: array[9, T]
+  
+  Mat3* = Matrix3[float64]
+
+proc `[]`*[T](mat: Matrix3[T], x, y: int): T =
+  return mat.data[x + y * 3]
+
+proc `[]=`*[T](mat: var Matrix3[T], x, y: int, value: T) =
+  mat.data[x + y * 3] = value
+
+proc `*`*[T](mat: Matrix3[T], vec: Vector3[T]): Vector3[T] =
+  return Vector3[T](
+    x: mat[0, 0] * vec.x + mat[1, 0] * vec.y + mat[2, 0] * vec.z,
+    y: mat[0, 1] * vec.x + mat[1, 1] * vec.y + mat[2, 1] * vec.z,
+    z: mat[0, 2] * vec.x + mat[1, 2] * vec.y + mat[2, 2] * vec.z
+  )
+
+proc `*`*[T](a, b: Matrix3[T]): Matrix3[T] =
+  for x in 0..<3:
+    for y in 0..<3:
+      var sum = T(0)
+      for it in 0..<3:
+        sum += a[it, y] * b[x, it]
+      result[x, y] = sum
+
+proc new_identity_mat3*(): Mat3 =
+  return Mat3(data: [
+    float64 1, 0, 0,
+    0, 1, 0,
+    0, 0, 1
+  ])
+
+type
   Matrix4*[T] = object
     data*: array[16, T]
 
