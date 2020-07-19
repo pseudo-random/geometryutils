@@ -77,6 +77,20 @@ proc load_obj*(source: string): Mesh =
       else:  
         echo "Unknown command: " & line
 
+proc add_tri*(mesh: Mesh, a, b, c: Vec3) =
+  ## Add a triangle to the given mesh
+  let
+    normal = cross(b - a, c - a).normalize()
+    idx = mesh.verts.len
+  mesh.verts.add(Vertex(pos: a, normal: normal))
+  mesh.verts.add(Vertex(pos: b, normal: normal))
+  mesh.verts.add(Vertex(pos: c, normal: normal))
+  mesh.tris.add([idx, idx + 1, idx + 2])
+
+proc add_tri*(mesh: Mesh, points: array[3, Vec3]) =
+  ## Add a triangle to the given mesh
+  mesh.add_tri(points[0], points[1], points[2])
+
 proc add_quad*(mesh: Mesh, pos, a, b: Vec3) =
   ## Add a quad to a given mesh
   let
@@ -88,6 +102,69 @@ proc add_quad*(mesh: Mesh, pos, a, b: Vec3) =
   mesh.verts.add(Vertex(pos: pos + b, normal: normal))
   mesh.tris.add([idx, idx + 1, idx + 2])
   mesh.tris.add([idx, idx + 2, idx + 3])
+
+proc add_sphere*(mesh: Mesh,
+                 pos: Vec3 = Vec3(),
+                 radius: float64 = 1,
+                 x_divs: int = 32,
+                 y_divs: int = 32) =
+  ## Add a sphere to the given mesh
+  let
+    x_incr = Deg(180) / Deg(x_divs)
+    y_incr = Deg(360) / Deg(y_divs)
+  proc to_pos(x, y: Deg): Vec3 =
+    pos + Vec3(y: 1).rotate_x(x).rotate_y(y) * radius
+  for x in 0..<x_divs:
+    for y in 0..<y_divs:
+      let
+        a = to_pos(x_incr * x.float64, y_incr * y.float64)
+        b = to_pos(x_incr * (x + 1).float64, y_incr * y.float64)
+        c = to_pos(x_incr * x.float64, y_incr * (y + 1).float64)
+        d = to_pos(x_incr * (x + 1).float64, y_incr * (y + 1).float64)
+      mesh.add_tri(a, b, c)
+      mesh.add_tri(b, d, c)
+
+proc add_cylinder*(mesh: Mesh,
+                   pos: Vec3 = Vec3(),
+                   radius: float64 = 1,
+                   height: float64 = 2,
+                   divs: int = 32) =
+  ## Add a cylinder to the given mesh
+  let
+    incr = Deg(360) / divs.float64
+    top = Vec3(y: height / 2) + pos
+    bottom = Vec3(y: -height / 2) + pos
+  proc to_pos(angle: Deg, y: float64): Vec3 =
+    pos + Vec3(x: cos(angle), z: sin(angle)) * radius + Vec3(y: y)
+  for it in 0..<divs:
+    let
+      a = to_pos(incr * it.float64, -height / 2)
+      b = to_pos(incr * it.float64, height / 2)
+      c = to_pos(incr * (it + 1).float64, -height / 2)
+      d = to_pos(incr * (it + 1).float64, height / 2)
+    mesh.add_tri(a, b, c)
+    mesh.add_tri(b, d, c)
+    mesh.add_tri(top, d, b)
+    mesh.add_tri(bottom, a, c)
+
+proc add_cone*(mesh: Mesh,
+               pos: Vec3 = Vec3(),
+               radius: float64 = 1,
+               height: float64 = 2,
+               divs: int = 32) =
+  ## Adds a cone to the given mesh
+  let
+    incr = Deg(360) / divs.float64
+    top = Vec3(y: height / 2) + pos
+    bottom = Vec3(y: -height / 2) + pos
+  proc to_pos(angle: Deg): Vec3 =
+    pos + Vec3(x: cos(angle), z: sin(angle)) * radius + Vec3(y: -height / 2)
+  for it in 0..<divs:
+    let
+      a = to_pos(incr * it.float64)
+      b = to_pos(incr * (it + 1).float64)
+    mesh.add_tri(a, top, b)
+    mesh.add_tri(bottom, a, b)
 
 proc add_cube*(mesh: Mesh, pos, size: Vec3) =  
   ## Add a cube with position `pos` and size `size` to the
@@ -106,11 +183,37 @@ proc new_cube_mesh*(pos, size: Vec3): Mesh =
   result = Mesh()
   result.add_cube(pos, size)
 
+proc new_sphere_mesh*(pos: Vec3 = Vec3(),
+                      radius: float64 = 1,
+                      x_divs: int = 32,
+                      y_divs: int = 32): Mesh =
+  ## Create a sphere mesh
+  result = Mesh()
+  result.add_sphere(pos, radius, x_divs, y_divs)
+
+proc new_cylinder_mesh*(pos: Vec3 = Vec3(),
+                        radius: float64 = 1,
+                        height: float64 = 2,
+                        divs: int = 32): Mesh =
+  ## Create a cylinder mesh
+  result = Mesh()
+  result.add_cylinder(pos, radius, height, divs)
+
+proc new_cone_mesh*(pos: Vec3 = Vec3(),
+                    radius: float64 = 1,
+                    height: float64 = 2,
+                    divs: int = 32): Mesh =
+  ## Creates a cone mesh
+  result = Mesh()
+  result.add_cone(pos, radius, height, divs)
+
 proc apply*(vert: var Vertex, mat: Mat4) =
+  ## Apply the given matrix to the vertex
   vert.pos = xyz(mat * new_vec4(vert.pos, 1))
   vert.normal = normalize(xyz(mat * new_vec4(vert.normal, 0)))
 
 proc apply*(mesh: Mesh, mat: Mat4) =
+  ## Apply the given matrix to the mesh
   for it in low(mesh.verts)..high(mesh.verts):
     mesh.verts[it].apply(mat)
 
