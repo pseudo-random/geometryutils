@@ -61,9 +61,9 @@ proc store*(stream: Stream, str: string) =
 proc store*[K, V](stream: Stream, tab: Table[K, V]) =
   mixin store
   stream.store(tab.len)
-  for key, value in tab:
+  for key in tab.keys:
     stream.store(key)
-    stream.store(value)
+    stream.store(tab[key])
 
 proc store*[T](stream: Stream, items: seq[T]) =
   mixin store
