@@ -66,3 +66,21 @@ block:
   test "Box3":
     a.center == Vec3()
     a.size == Vec3(x: 2, y: 2, z: 2)
+
+block:
+  let mat = Mat2(data: [float64 1, 2, 3, 4])
+  
+  test "Mat2":
+    mat * mat.inverse() == new_identity_mat2()
+
+block:
+  let mat = Mat4(data: [
+    float64 1, 2, 3, 4,
+    5, 6, 7, 8,
+    9, 10, 3, 12,
+    13, 14, 15, 1
+  ])
+  
+  test "Mat4":
+    abs(sum(mat * mat.inverse() - new_identity_mat4())) < 0.0001
+

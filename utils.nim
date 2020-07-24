@@ -355,6 +355,20 @@ proc `[]`*[T](mat: Matrix2[T], x, y: int): T =
 proc `[]=`*[T](mat: var Matrix2[T], x, y: int, value: T) =
   mat.data[x + y * 2] = value
 
+template define_matrix_binary_elementwise(mat_kind, count, op) =
+  proc op*[T](a, b: mat_kind[T]): mat_kind[T] =
+    for it in 0..<count:
+      result.data[it] = op(a.data[it], b.data[it])
+
+template define_matrix_unary_elementwise(mat_kind, count, op) =
+  proc op*[T](a: mat_kind[T]): mat_kind[T] =
+    for it in 0..<count:
+      result.data[it] = op(a.data[it])
+
+define_matrix_binary_elementwise(Matrix2, 4, `+`)
+define_matrix_binary_elementwise(Matrix2, 4, `-`)
+define_matrix_unary_elementwise(Matrix2, 4, `-`)
+
 proc `*`*[T](mat: Matrix2[T], vec: Vector2[T]): Vector2[T] =
   return Vector2[T](
     x: mat[0, 0] * vec.x + mat[1, 0] * vec.y,
@@ -368,6 +382,16 @@ proc `*`*[T](a, b: Matrix2[T]): Matrix2[T] =
       for it in 0..<2:
         sum += a[it, y] * b[x, it]
       result[x, y] = sum
+
+proc det*[T](mat: Matrix2[T]): T =
+  mat[0, 0] * mat[1, 1] - mat[1, 0] * mat[0, 1]
+
+proc inverse*[T](mat: Matrix2[T]): Matrix2[T] =
+  let fact = 1 / mat.det()
+  return Matrix2[T](data: [
+    fact * mat[1, 1], -fact * mat[1, 0],
+    -fact * mat[0, 1], fact * mat[0, 0]
+  ])
 
 proc new_identity_mat2*(): Mat2 =
   return Mat2(data: [
@@ -401,6 +425,10 @@ proc `*`*[T](a, b: Matrix3[T]): Matrix3[T] =
       for it in 0..<3:
         sum += a[it, y] * b[x, it]
       result[x, y] = sum
+
+define_matrix_binary_elementwise(Matrix3, 9, `+`)
+define_matrix_binary_elementwise(Matrix3, 9, `-`)
+define_matrix_unary_elementwise(Matrix3, 9, `-`)
 
 proc new_identity_mat3*(): Mat3 =
   return Mat3(data: [
@@ -436,6 +464,44 @@ proc `*`*[T](a, b: Matrix4[T]): Matrix4[T] =
       for it in 0..<4:
         sum += a[it, y] * b[x, it]
       result[x, y] = sum
+
+proc submatrix2*[T](mat: Matrix4[T], pos: Index2): Matrix2[T] =
+  return Matrix2[T](data: [
+    mat[pos.x, pos.y], mat[pos.x + 1, pos.y],
+    mat[pos.x, pos.y + 1], mat[pos.x + 1, pos.y + 1]
+  ])
+
+proc new_matrix4*[T](a, b, c, d: Matrix2[T]): Matrix4[T] =
+  return Matrix4[T](data: [
+    a[0, 0], a[1, 0], b[0, 0], b[1, 0],
+    a[0, 1], a[1, 1], b[0, 1], b[1, 1],
+    c[0, 0], c[1, 0], d[0, 0], d[1, 0],
+    c[0, 1], c[1, 1], d[0, 1], d[1, 1]
+  ])
+
+proc inverse*[T](mat: Matrix4[T]): Matrix4[T] =
+  ## See https://en.wikipedia.org/wiki/Invertible_matrix#Inversion_of_4_%C3%97_4_matrices
+  let
+    a = mat.submatrix2(Index2())
+    b = mat.submatrix2(Index2(x: 2))
+    c = mat.submatrix2(Index2(y: 2))
+    d = mat.submatrix2(Index2(x: 2, y: 2))
+    a_inv = a.inverse()
+    e = inverse(d - c * a_inv * b)
+  return new_matrix4(
+    a_inv + a_inv * b * e * c * a_inv,
+    -a_inv * b * e,
+    -e * c * a_inv,
+    e
+  )
+
+define_matrix_binary_elementwise(Matrix4, 16, `+`)
+define_matrix_binary_elementwise(Matrix4, 16, `-`)
+define_matrix_unary_elementwise(Matrix4, 16, `-`)
+
+proc sum*[T](mat: Matrix4[T]): T =
+  for item in mat.data:
+    result += item
 
 proc new_identity_mat4*(): Mat4 =
   return Mat4(data: [
