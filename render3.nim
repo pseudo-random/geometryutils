@@ -321,12 +321,6 @@ type
     batch_size: int
     instances: seq[Instance]
 
-  Camera* = object
-    mat*: Mat4
-    fov*: Deg
-    near*: float64
-    far*: float64
-
   LightKind* = enum LightPoint, LightSun, LightAmbient
   Light* = object
     case kind*: LightKind:
@@ -347,7 +341,7 @@ type
     meshes: Table[Mesh, Batch[Mesh]]
     wireframes: Table[Wireframe, Batch[Wireframe]]
     
-    camera*: Camera
+    camera*: Camera3
     max_point_lights: int
     point_lights: seq[Light]
     max_sun_lights: int
@@ -383,22 +377,6 @@ proc `==`(a, b: Mesh): bool = a[].addr == b[].addr
 
 proc hash(wireframe: Wireframe): Hash = return !$ wireframe[].addr.hash()
 proc `==`(a, b: Wireframe): bool = a[].addr == b[].addr
-
-proc make_matrix(camera: Camera, size: Index2): Mat4 =
-  let perspective = new_perspective_mat4(
-    camera.fov, size.x / size.y, camera.near, camera.far
-  )
-  return perspective * camera.mat
-
-proc new_camera*(fov: Deg = Deg(35),
-                 near: float64 = 0.1,
-                 far: float64 = 200.0): Camera =
-  return Camera(
-    fov: fov,
-    near: 0.1,
-    far: 200.0,
-    mat: new_identity_mat4()
-  )
 
 const
   # TODO: Load files at compile time
@@ -528,7 +506,7 @@ proc new_render3*(window: BaseWindow): Render3 =
     window: window,
     shader_prog: shader_prog,
     wireframe_shader_prog: wireframe_shader_prog,
-    camera: new_camera(),
+    camera: new_camera3(),
     max_point_lights: 32,
     max_sun_lights: 1
   )
@@ -738,7 +716,7 @@ proc process*(cont: var OrbitCameraController,
     else: discard
 
 proc update*(cont: OrbitCameraController,
-             camera: var Camera) =
+             camera: var Camera3) =
   let
     translate = new_translate_mat4(Vec3(z: -cont.zoom))
     rot_y = new_rotate_y_mat4(cont.y)
@@ -778,9 +756,8 @@ proc process*(cont: var ModelCameraController,
     else: discard
 
 proc update*(cont: ModelCameraController,
-             camera: var Camera) =
+             camera: var Camera3) =
   let
     translate = new_translate_mat4(Vec3(z: -cont.zoom))
     rot = new_rotate_mat4(cont.rot)
   camera.mat = translate * rot
-

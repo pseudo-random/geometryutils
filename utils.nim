@@ -773,4 +773,26 @@ proc map*[S, T](view: Viewport[S, T], pos: S): T =
 proc map_reverse*[S, T](view: Viewport[S, T], pos: T): S =
   pos / view.size * view.box.size + view.box.min
 
+type
+  Camera3* = object
+    mat*: Mat4
+    fov*: Deg
+    near*: float64
+    far*: float64
+
+proc make_matrix*(camera: Camera3, size: Index2): Mat4 =
+  let perspective = new_perspective_mat4(
+    camera.fov, size.x / size.y, camera.near, camera.far
+  )
+  return perspective * camera.mat
+
+proc new_camera3*(fov: Deg = Deg(35),
+                  near: float64 = 0.1,
+                  far: float64 = 200.0): Camera3 =
+  return Camera3(
+    fov: fov,
+    near: 0.1,
+    far: 200.0,
+    mat: new_identity_mat4()
+  )
 
