@@ -1,5 +1,5 @@
 import times
-import ../utils, ../window, ../render3
+import utils/[utils, window, render3]
 
 proc new_grid_element(size: float64): Wireframe =
   result = Wireframe()

@@ -1,4 +1,4 @@
-import ../utils, ../window, ../render3
+import utils/[utils, window, render3]
 
 let
   win = new_window("Cube", resizable=true)

@@ -1,5 +1,5 @@
 import sequtils
-import ../window, ../render3, ../utils
+import utils/[utils, window, render3]
 
 let
   win = new_window("Meshes")

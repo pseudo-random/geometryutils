@@ -1,8 +1,6 @@
-test
-test_all
+src/utils/test_all
 .temp*
-test.svg
-oldtest.nim
+src/utils/test.svg
 examples/assets/
 examples/cube
 examples/grid

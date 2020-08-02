@@ -1,5 +1,5 @@
 import streams, tables
-import ../utils, ../serialize
+import utils/[utils, serialize]
 
 type
   MyType = object

@@ -112,7 +112,8 @@ proc poll*(window: Window): seq[Event] =
         let event = cast[WindowEventPtr](evt.addr)
         case event.event:
           of WindowEvent_Resized:
-            window.size = Index2(x: event.data1.int, y: event.data2.int)
+            var size = get_size(window.win)
+            window.size = Index2(x: size.x.int, y: size.y.int)
             gl_viewport(0, 0, window.size.x.cint, window.size.y.cint)
             window.add(Event(kind: EventResize, size: window.size))
           else:
