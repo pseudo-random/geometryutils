@@ -1,7 +1,7 @@
 version = "1.0.0"
 author = "pseudo-random <josh.leh.2018@gmail.com>"
 license = "MIT"
-description = "A collection of utilities for nim"
+description = "A collection of geometry utilities for nim"
 src_dir = "src"
 
 requires "nim >= 1.2.4"

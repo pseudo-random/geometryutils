@@ -1,4 +1,4 @@
-import utils/[utils, window, render2]
+import geometryutils/[utils, window, render2]
 
 let
   win = new_window("Text")

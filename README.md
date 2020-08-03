@@ -1,5 +1,7 @@
-# Utils
-This is a collection of utilities I often use when programming in nim.
+# geometryutils
+Geometryutils is a collection of geometry utilities for nim. It aims
+to provide many features which are often required when working on
+geometry related applications.
 
 ## Features
 - Vector, Matrix and Quaternion Math

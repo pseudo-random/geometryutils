@@ -1,5 +1,5 @@
 import streams, tables
-import utils/[utils, serialize]
+import geometryutils/[utils, serialize]
 
 type
   MyType = object

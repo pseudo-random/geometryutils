@@ -1,4 +1,5 @@
-src/utils/test_all
+src/geometryutils/test_all
+test.md
 .temp*
 src/utils/test.svg
 examples/assets/
