@@ -1,20 +1,3 @@
-# geometryutils
-Geometryutils is a collection of geometry utilities for nim. It aims
-to provide many features which are often required when working on
-geometry related applications.
-
-## Features
-- Vector, Matrix and Quaternion Math
-- Procedures for working with Colors
-- 2d Vector Renderer (`VectorRender2`)
-- 2d Renderer (`Render2`)
-- 3d Renderer (`Render3`)
-- Degree and Radian Types (`Deg`, `Rad`) with automatic conversions
-- Data serialization (`load`, `store`)
-
-## Introduction
-
-```nim
 import geometryutils/[utils]
 
 # The most important data structures provided by the
@@ -91,9 +74,3 @@ ren.text(Vec2(x: 50, y: 50), "Hello, world")
 
 import xmltree
 write_file("my_image.svg", $ren.to_svg())
-```
-
-You can find more examples in the `examples` folder.
-
-## License
-This project is licensed under the MIT license. See LICENSE.txt for more details.
