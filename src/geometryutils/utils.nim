@@ -82,23 +82,37 @@ type
   Vec2* = Vector2[float64]
   Index2* = Vector2[int]
 
-proc `+`*[T](a, b: Vector2[T]): Vector2[T] =
-  Vector2[T](x: a.x + b.x, y: a.y + b.y)
+template lift_binary_vector2(op) =
+  proc op*[T](a, b: Vector2[T]): Vector2[T] =
+    Vector2[T](x: op(a.x, b.x), y: op(a.y, b.y))
 
-proc `-`*[T](a, b: Vector2[T]): Vector2[T] =
-  Vector2[T](x: a.x - b.x, y: a.y - b.y)
+lift_binary_vector2(`+`)
+lift_binary_vector2(`-`)
+lift_binary_vector2(`*`)
+lift_binary_vector2(`/`)
+lift_binary_vector2(`mod`)
+lift_binary_vector2(`div`)
+lift_binary_vector2(min)
+lift_binary_vector2(max)
 
-proc `*`*[T](a, b: Vector2[T]): Vector2[T] =
-  Vector2[T](x: a.x * b.x, y: a.y * b.y)
+template lift_unary_vector2(op) =
+  proc op*[T](vec: Vector2[T]): Vector2[T] =
+    Vector2[T](x: op(vec.x), y: op(vec.y))
 
-proc `*`*[T](a: Vector2[T], b: T): Vector2[T] =
-  Vector2[T](x: a.x * b, y: a.y * b)
+lift_unary_vector2(floor)
+lift_unary_vector2(ceil)
+lift_unary_vector2(round)
+lift_unary_vector2(abs)
 
-proc `/`*[T](a, b: Vector2[T]): Vector2[T] =
-  Vector2[T](x: a.x / b.x, y: a.y / b.y)
+template lift_binary_scalar_vector2(op) =
+  proc op*[T](a: Vector2[T], b: T): Vector2[T] =
+    Vector2[T](x: op(a.x, b), y: op(a.y, b))
+  
+  proc op*[T](a: T, b: Vector2[T]): Vector2[T] =
+    Vector2[T](x: op(a, b.x), y: op(a, b.y))
 
-proc `/`*[T](a: Vector2[T], b: T): Vector2[T] =
-  Vector2[T](x: a.x / b, y: a.y / b)
+lift_binary_scalar_vector2(`*`)
+lift_binary_scalar_vector2(`/`)
 
 proc length*[T](vec: Vector2[T]): float64 =
   sqrt(float64(vec.x * vec.x + vec.y * vec.y))
@@ -116,36 +130,15 @@ proc dot*[T](a, b: Vector2[T]): T =
 proc angle*[T](vec: Vector2[T]): Rad =
   Rad(arctan2(vec.y.float64, vec.x.float64))
 
-proc min*[T](a, b: Vector2[T]): Vector2[T] =
-  Vector2[T](x: min(a.x, b.x), y: min(a.y, b.y))
+template lift_mutate_vector2(op) =
+  proc op*[T](a: var Vector2[T], b: Vector2[T]) =
+    op(a.x, b.x)
+    op(a.y, b.y)
 
-proc max*[T](a, b: Vector2[T]): Vector2[T] =
-  Vector2[T](x: max(a.x, b.x), y: max(a.y, b.y))
-
-proc floor*[T](vec: Vector2[T]): Vector2[T] =
-  Vector2[T](x: vec.x.floor(), y: vec.y.floor())
-
-proc ceil*[T](vec: Vector2[T]): Vector2[T] =
-  Vector2[T](x: vec.x.ceil(), y: vec.y.ceil())
-
-proc round*[T](vec: Vector2[T]): Vector2[T] =
-  Vector2[T](x: vec.x.round(), y: vec.y.round())
-
-proc `+=`*[T](a: var Vector2[T], b: Vector2[T]) =
-  a.x += b.x
-  a.y += b.y
-
-proc `-=`*[T](a: var Vector2[T], b: Vector2[T]) =
-  a.x -= b.x
-  a.y -= b.y
-
-proc `*=`*[T](a: var Vector2[T], b: Vector2[T]) =
-  a.x *= b.x
-  a.y *= b.y
-
-proc `/=`*[T](a: var Vector2[T], b: Vector2[T]) =
-  a.x /= b.x
-  a.y /= b.y
+lift_mutate_vector2(`+=`)
+lift_mutate_vector2(`-=`)
+lift_mutate_vector2(`*=`)
+lift_mutate_vector2(`/=`)
 
 proc hash*[T](vec: Vector2[T]): Hash =  
   return !$(vec.x.hash() !& vec.y.hash())
@@ -171,26 +164,38 @@ type
   Vec3* = Vector3[float64]
   Index3* = Vector3[int]
 
-proc `+`*[T](a, b: Vector3[T]): Vector3[T] =
-  Vector3[T](x: a.x + b.x, y: a.y + b.y, z: a.z + b.z)
+template lift_binary_vector3(op) =
+  proc op*[T](a, b: Vector3[T]): Vector3[T] =
+    Vector3[T](x: op(a.x, b.x), y: op(a.y, b.y), z: op(a.z, b.z))
 
-proc `-`*[T](a, b: Vector3[T]): Vector3[T] =
-  Vector3[T](x: a.x - b.x, y: a.y - b.y, z: a.z - b.z)
+lift_binary_vector3(`+`)
+lift_binary_vector3(`-`)
+lift_binary_vector3(`*`)
+lift_binary_vector3(`/`)
+lift_binary_vector3(`div`)
+lift_binary_vector3(`mod`)
+lift_binary_vector3(min)
+lift_binary_vector3(max)
 
-proc `*`*[T](a, b: Vector3[T]): Vector3[T] =
-  Vector3[T](x: a.x * b.x, y: a.y * b.y, z: a.z * b.z)
+template lift_binary_scalar_vector3(op) =
+  proc op*[T](a: Vector3[T], b: T): Vector3[T] =
+    Vector3[T](x: op(a.x, b), y: op(a.y, b), z: op(a.z, b))
+  
+  proc op*[T](a: T, b: Vector3[T]): Vector3[T] =
+    Vector3[T](x: op(a, b.x), y: op(a, b.y), z: op(a, b.z))
 
-proc `/`*[T](a, b: Vector3[T]): Vector3[T] =
-  Vector3[T](x: a.x / b.x, y: a.y / b.y, z: a.z / b.z)
+lift_binary_scalar_vector3(`*`)
+lift_binary_scalar_vector3(`/`)
 
-proc `*`*[T](a: Vector3[T], b: T): Vector3[T] =
-  Vector3[T](x: a.x * b, y: a.y * b, z: a.z * b)
+template lift_unary_vector3(op) =
+  proc op*[T](vec: Vector3[T]): Vector3[T] =
+    Vector3[T](x: op(vec.x), y: op(vec.y), z: op(vec.z))
 
-proc `/`*[T](a: Vector3[T], b: T): Vector3[T] =
-  Vector3[T](x: a.x / b, y: a.y / b, z: a.z / b)
-
-proc `-`*[T](vec: Vector3[T]): Vector3[T] =
-  Vector3[T](x: -vec.x, y: -vec.y, z: -vec.z)
+lift_unary_vector3(`-`)
+lift_unary_vector3(floor)
+lift_unary_vector3(ceil)
+lift_unary_vector3(round)
+lift_unary_vector3(abs)
 
 proc length*[T](vec: Vector3[T]): float64 =
   sqrt(float64(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z))
@@ -212,31 +217,16 @@ proc cross*[T](a, b: Vector3[T]): Vector3[T] =
     z: a.x * b.y - a.y * b.x
   )
 
-proc min*[T](a, b: Vector3[T]): Vector3[T] =
-  Vector3[T](x: min(a.x, b.x), y: min(a.y, b.y), z: min(a.z, b.z))
+template lift_mutate_vector3(op) =
+  proc op*[T](a: var Vector3[T], b: Vector3[T]) =
+    op(a.x, b.x)
+    op(a.y, b.y)
+    op(a.z, b.z)
 
-proc max*[T](a, b: Vector3[T]): Vector3[T] =
-  Vector3[T](x: max(a.x, b.x), y: max(a.y, b.y), z: max(a.z, b.z))
-
-proc `+=`*[T](a: var Vector3[T], b: Vector3[T]) =
-  a.x += b.x
-  a.y += b.y
-  a.z += b.z
-
-proc `-=`*[T](a: var Vector3[T], b: Vector3[T]) =
-  a.x -= b.x
-  a.y -= b.y
-  a.z -= b.z
-
-proc `*=`*[T](a: var Vector3[T], b: Vector3[T]) =
-  a.x *= b.x
-  a.y *= b.y
-  a.z *= b.z
-
-proc `/=`*[T](a: var Vector3[T], b: Vector3[T]) =
-  a.x /= b.x
-  a.y /= b.y
-  a.z /= b.z
+lift_mutate_vector3(`+=`)
+lift_mutate_vector3(`-=`)
+lift_mutate_vector3(`*=`)
+lift_mutate_vector3(`/=`)
 
 proc hash*[T](vec: Vector3[T]): Hash =  
   return !$(vec.x.hash() !& vec.y.hash() !& vec.z.hash())
@@ -266,6 +256,12 @@ proc new_vec3*(vec: Vec2, z: float64): Vec3 =
 proc new_vec3*(x: float64, vec: Vec2): Vec3 =
   Vec3(x: x, y: vec.x, z: vec.y)
 
+proc to_index3*(vec: Vec3): Index3 =
+  Index3(x: int(vec.x), y: int(vec.y), z: int(vec.z))
+
+proc to_vec3*(index: Index3): Vec3 =
+  Vec3(x: float64(index.x), y: float64(index.y), z: float64(index.z))
+
 type
   Vector4*[T] = object
     x*: T
@@ -276,11 +272,28 @@ type
   Vec4* = Vector4[float64]
   Index4* = Vector4[int]
 
-proc min*[T](a, b: Vector4[T]): Vector4[T] =
-  Vector4[T](x: min(a.x, b.x), y: min(a.y, b.y), z: min(a.z, b.z), w: min(a.w, b.w))
+template lift_binary_vector4(op) =
+  proc op*[T](a, b: Vector4[T]): Vector4[T] =
+    Vector4[T](x: op(a.x, b.x), y: op(a.y, b.y), z: op(a.z, b.z), w: op(a.w, b.w))
 
-proc max*[T](a, b: Vector4[T]): Vector4[T] =
-  Vector4[T](x: max(a.x, b.x), y: max(a.y, b.y), z: max(a.z, b.z), w: max(a.w, b.w))
+lift_binary_vector4(`+`)
+lift_binary_vector4(`-`)
+lift_binary_vector4(`*`)
+lift_binary_vector4(`/`)
+lift_binary_vector4(`div`)
+lift_binary_vector4(`mod`)
+lift_binary_vector4(min)
+lift_binary_vector4(max)
+
+template lift_unary_vector4(op) =
+  proc op*[T](vec: Vector4[T]): Vector4[T] =
+    Vector4[T](x: op(vec.x), y: op(vec.y), z: op(vec.z), w: op(vec.w))
+
+lift_unary_vector4(`-`)
+lift_unary_vector4(floor)
+lift_unary_vector4(round)
+lift_unary_vector4(ceil)
+lift_unary_vector4(abs)
 
 proc yzw*[T](vec: Vector4[T]): Vector3[T] =
   Vector3[T](x: vec.y, y: vec.z, z: vec.w)
@@ -299,6 +312,12 @@ proc zw*[T](vec: Vector4[T]): Vector2[T] =
 
 proc new_vec4*(vec: Vec3, w: float64): Vec4 =
   Vec4(x: vec.x, y: vec.y, z: vec.z, w: w)
+
+proc to_index4*(vec: Vec4): Index4 =
+  Index4(x: int(vec.x), y: int(vec.y), z: int(vec.z), w: int(vec.w))
+
+proc to_vec4*(index: Index4): Vec4 =
+  Vec4(x: float64(index.x), y: float64(index.y), z: float64(index.z), w: float64(index.w))
 
 type
   Quat* = object
@@ -623,35 +642,36 @@ proc rgba*(hex: uint32): Color =
 proc hsv*(h, s, v: float64): Color = 
   quit "Not implemented"
 
-proc `+`*(a, b: Color): Color =
-  Color(r: a.r + b.r, g: a.g + b.g, b: a.b + b.b, a: a.a + b.a)
+template lift_binary_color(op) =
+  proc op*(a, b: Color): Color =
+    Color(r: op(a.r, b.r), g: op(a.g, b.g), b: op(a.b, b.b), a: op(a.a, b.a))
 
-proc `*`*(a: Color, b: float64): Color =
-  Color(r: a.r * b, g: a.g * b, b: a.b * b, a: a.a * b)
+lift_binary_color(`+`)
+lift_binary_color(`-`)
+lift_binary_color(`*`)
+lift_binary_color(`/`)
 
-proc `*`*(a, b: Color): Color =
-  Color(r: a.r * b.r, g: a.g * b.g, b: a.b * b.b, a: a.a * b.a)
+template lift_binary_scalar_color(op) =
+  proc op*(a: Color, b: float64): Color =
+    Color(r: op(a.r, b), g: op(a.g, b), b: op(a.b, b), a: op(a.a, b))
 
-proc `/`*(a: Color, b: float64): Color =
-  Color(r: a.r / b, g: a.g / b, b: a.b / b, a: a.a / b)
+  proc op*(a: float64, b: Color): Color =
+    Color(r: op(a, b.r), g: op(a, b.g), b: op(a, b.b), a: op(a, b.a))
 
-proc `+=`*(a: var Color, b: Color) =
-  a.r += b.r
-  a.g += b.g
-  a.b += b.b
-  a.a += b.a
+lift_binary_scalar_color(`*`)
+lift_binary_scalar_color(`/`)
 
-proc `*=`*(a: var Color, b: Color) =
-  a.r *= b.r
-  a.g *= b.g
-  a.b *= b.b
-  a.a *= b.a
+template lift_mutate_color(op) =
+  proc op*(a: var Color, b: Color) =
+    op(a.r, b.r)
+    op(a.g, b.g)
+    op(a.b, b.b)
+    op(a.a, b.a)
 
-proc `/=`*(a: var Color, b: Color) =
-  a.r /= b.r
-  a.g /= b.g
-  a.b /= b.b
-  a.a /= b.a
+lift_mutate_color(`+=`)
+lift_mutate_color(`-=`)
+lift_mutate_color(`*=`)
+lift_mutate_color(`/=`)
 
 proc `*=`*(a: var Color, b: float64) =
   a.r *= b
