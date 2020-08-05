@@ -39,7 +39,10 @@ type
       of PathClose: discard
 
   ShapeKind = enum
-    ShapeRect, ShapeCircle, ShapeLine, ShapeText, ShapePath, ShapeBackground
+    ShapeBackground, ShapeRect,
+    ShapeCircle, ShapeEllipse,
+    ShapeLine, ShapePath,
+    ShapeText
 
   Shape = object
     fill: Color
@@ -60,10 +63,14 @@ type
         text_pos: Vec2
         text_x_align: Align
         text_y_align: Align
+        text_rotation: Deg
         font_size: float64
         font_family: string
       of ShapePath:
         path: seq[PathPoint]
+      of ShapeEllipse:
+        ellipse_pos: Vec2
+        ellipse_size: Vec2
       of ShapeBackground: discard
 
   VectorRender2* = object
@@ -108,6 +115,11 @@ proc circle*(ren: var VectorRender2, pos: Vec2, radius: float64) =
     circle_pos: pos, circle_radius: radius
   ).add_style(ren))
 
+proc ellipse*(ren: var VectorRender2, pos, size: Vec2) =
+  ren.shapes.add(Shape(kind: ShapeEllipse,
+    ellipse_pos: pos, ellipse_size: size
+  ).add_style(ren))
+
 proc line*(ren: var VectorRender2, a, b: Vec2) =
   ren.shapes.add(Shape(kind: ShapeLine,
     line_a: a, line_b: b
@@ -117,12 +129,14 @@ proc text*(ren: var VectorRender2,
            pos: Vec2,
            text: string,
            x_align: Align = AlignStart,
-           y_align: Align = AlignEnd) =
+           y_align: Align = AlignEnd,
+           rotation: Deg = Deg(0)) =
   ren.shapes.add(Shape(kind: ShapeText,
     text_pos: pos, text: text,
     font_size: ren.font_size,
     font_family: ren.font_family,
     text_x_align: x_align, text_y_align: y_align,
+    text_rotation: rotation
   ).add_style(ren))
 
 proc move_to*(ren: var VectorRender2, pos: Vec2) =
@@ -204,14 +218,19 @@ proc to_svg*(shape: Shape, size: Index2): XmlNode =
         "y2": $shape.line_b.y,
       })).add_style(shape)
     of ShapeText:
-      return new_xml_tree("text", [new_text(shape.text)], to_xml_attributes({
-        "x": $shape.text_pos.x,
-        "y": $shape.text_pos.y,
+      var attrs = to_xml_attributes({
         "font-size": $shape.font_size,
         "font-family": shape.font_family,
         "text-anchor": shape.text_x_align.to_text_anchor(),
         "dominant-baseline": shape.text_y_align.to_text_baseline()
-      })).add_style(shape)
+      })
+      if shape.text_rotation != Deg(0):
+        attrs["transform"] = "translate(" & $shape.text_pos.x & " " & $shape.text_pos.y & ") "
+        attrs["transform"] &= "rotate(" & $float64(shape.text_rotation) & ")"
+      else:
+        attrs["x"] = $shape.text_pos.x
+        attrs["y"] = $shape.text_pos.y
+      return new_xml_tree("text", [new_text(shape.text)], attrs).add_style(shape)
     of ShapePath:
       return new_xml_tree("path", [], to_xml_attributes({
         "d": shape.path.map(to_svg).join(" ")
@@ -220,6 +239,13 @@ proc to_svg*(shape: Shape, size: Index2): XmlNode =
       return new_xml_tree("rect", [], to_xml_attributes({
         "x": "0", "y": "0",
         "width": $size.x, "height": $size.y,
+      })).add_style(shape)
+    of ShapeEllipse:
+      return new_xml_tree("ellipse", [], to_xml_attributes({
+        "cx": $shape.ellipse_pos.x,
+        "cy": $shape.ellipse_pos.y,
+        "rx": $shape.ellipse_size.x,
+        "ry": $shape.ellipse_size.y
       })).add_style(shape)
 
 proc to_svg*(ren: VectorRender2): XmlNode =
