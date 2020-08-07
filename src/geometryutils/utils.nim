@@ -767,6 +767,12 @@ proc size*[T](box: BoundingBox[T]): T =
 proc center*[T](box: BoundingBox[T]): T =
   (box.min + box.max) / 2
 
+proc union*[T](a, b: BoundingBox[T]): BoundingBox[T] =
+  return BoundingBox[T](
+    min: min(a.min, b.min),
+    max: max(a.max, b.max)
+  )
+
 proc new_bounding_box*[T](points: seq[T]): BoundingBox[T] =
   result.min = points[0]
   result.max = points[0]
