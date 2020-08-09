@@ -773,6 +773,9 @@ proc union*[T](a, b: BoundingBox[T]): BoundingBox[T] =
     max: max(a.max, b.max)
   )
 
+proc hash*[T](box: BoundingBox[T]): Hash =
+  return !$(box.min.hash() !& box.max.hash())
+
 proc new_bounding_box*[T](points: seq[T]): BoundingBox[T] =
   result.min = points[0]
   result.max = points[0]

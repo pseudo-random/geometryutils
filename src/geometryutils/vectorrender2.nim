@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import xmltree, strtabs, sequtils, strutils, sugar
+import xmltree, strtabs, sequtils, strutils, sugar, tables
 import utils
 
 type
@@ -48,6 +48,8 @@ type
     fill: Color
     stroke: Color
     stroke_width: float64
+    clip: Box2
+    has_clip: bool
     case kind: ShapeKind:
       of ShapeRect:
         rect_pos: Vec2
@@ -76,10 +78,12 @@ type
   VectorRender2* = object
     size*: Index2
     shapes: seq[Shape]
- 
+    
     stroke*: Color
     stroke_width*: float64
     fill*: Color
+    has_clip*: bool
+    clip*: Box2
     
     font_size*: float64
     font_family*: string
@@ -101,6 +105,9 @@ proc add_style(shape: Shape, ren: VectorRender2): Shape =
   result.fill = ren.fill
   result.stroke = ren.stroke
   result.stroke_width = ren.stroke_width
+  if ren.has_clip:
+    result.has_clip = true
+    result.clip = ren.clip
 
 proc background*(ren: var VectorRender2, color: Color) =
   ren.shapes.add(Shape(kind: ShapeBackground, fill: color))
@@ -129,7 +136,7 @@ proc text*(ren: var VectorRender2,
            pos: Vec2,
            text: string,
            x_align: Align = AlignStart,
-           y_align: Align = AlignEnd,
+           y_align: Align = AlignStart,
            rotation: Deg = Deg(0)) =
   ren.shapes.add(Shape(kind: ShapeText,
     text_pos: pos, text: text,
@@ -151,6 +158,10 @@ proc end_path*(ren: var VectorRender2, close: bool = false) =
   ren.shapes.add(Shape(kind: ShapePath, path: ren.path).add_style(ren))
   ren.path = @[]
 
+proc clip_region*(ren: var VectorRender2, clip: Box2) =
+  ren.clip = clip
+  ren.has_clip = true
+
 proc to_svg*(color: Color): string =
   if color.a == 0:
     return "none"
@@ -168,11 +179,27 @@ proc to_svg*(color: Color): string =
     result &= $(color.a * 100) & "%"
     result &= ")"
 
-proc add_style(node: XmlNode, shape: Shape): XmlNode =
+proc add_style(node: XmlNode,
+               shape: Shape,
+               defs: var seq[XmlNode],
+               clips: var Table[Box2, string]): XmlNode =
   result = node
   result.attrs["stroke-width"] = $shape.stroke_width
   result.attrs["stroke"] = shape.stroke.to_svg()
   result.attrs["fill"] = shape.fill.to_svg()
+  if shape.has_clip:
+    if shape.clip notin clips:
+      let name = "clip" & $clips.len
+      defs.add(new_xml_tree("clipPath", [
+        new_xml_tree("rect", [], to_xml_attributes({
+          "x": $shape.clip.min.x,
+          "y": $shape.clip.min.y,
+          "width": $shape.clip.size.x,
+          "height": $shape.clip.size.y
+        }))
+      ], to_xml_attributes({"id": name})))
+      clips[shape.clip] = name
+    result.attrs["clip-path"] = "url(#" & clips[shape.clip] & ")"
 
 proc to_text_anchor(align: Align): string =
   case align:
@@ -195,28 +222,31 @@ proc to_svg(point: PathPoint): string =
     of PathClose:
       return "Z"
 
-proc to_svg*(shape: Shape, size: Index2): XmlNode =
+proc to_svg*(shape: Shape,
+             size: Index2,
+             defs: var seq[XmlNode],
+             clips: var Table[Box2, string]): XmlNode =
   case shape.kind:
     of ShapeCircle:
       return new_xml_tree("circle", [], to_xml_attributes({
         "cx": $shape.circle_pos.x,
         "cy": $shape.circle_pos.y,
         "r": $shape.circle_radius,
-      })).add_style(shape)
+      })).add_style(shape, defs, clips)
     of ShapeRect:
       return new_xml_tree("rect", [], to_xml_attributes({
         "x": $shape.rect_pos.x,
         "y": $shape.rect_pos.y,
         "width": $shape.rect_size.x,
         "height": $shape.rect_size.y,
-      })).add_style(shape)
+      })).add_style(shape, defs, clips)
     of ShapeLine:
       return new_xml_tree("line", [], to_xml_attributes({
         "x1": $shape.line_a.x,
         "y1": $shape.line_a.y,
         "x2": $shape.line_b.x,
         "y2": $shape.line_b.y,
-      })).add_style(shape)
+      })).add_style(shape, defs, clips)
     of ShapeText:
       var attrs = to_xml_attributes({
         "font-size": $shape.font_size,
@@ -230,26 +260,36 @@ proc to_svg*(shape: Shape, size: Index2): XmlNode =
       else:
         attrs["x"] = $shape.text_pos.x
         attrs["y"] = $shape.text_pos.y
-      return new_xml_tree("text", [new_text(shape.text)], attrs).add_style(shape)
+      return new_xml_tree("text", [new_text(shape.text)], attrs).add_style(shape, defs, clips)
     of ShapePath:
       return new_xml_tree("path", [], to_xml_attributes({
         "d": shape.path.map(to_svg).join(" ")
-      })).add_style(shape)
+      })).add_style(shape, defs, clips)
     of ShapeBackground:
       return new_xml_tree("rect", [], to_xml_attributes({
         "x": "0", "y": "0",
         "width": $size.x, "height": $size.y,
-      })).add_style(shape)
+      })).add_style(shape, defs, clips)
     of ShapeEllipse:
       return new_xml_tree("ellipse", [], to_xml_attributes({
         "cx": $shape.ellipse_pos.x,
         "cy": $shape.ellipse_pos.y,
         "rx": $shape.ellipse_size.x,
         "ry": $shape.ellipse_size.y
-      })).add_style(shape)
+      })).add_style(shape, defs, clips)
 
 proc to_svg*(ren: VectorRender2): XmlNode =
-  new_xml_tree("svg", ren.shapes.map(shape => to_svg(shape, ren.size)), to_xml_attributes({
+  var
+    defs: seq[XmlNode] = @[]
+    clips = init_table[Box2, string]()
+    body: seq[XmlNode] = @[]
+  for shape in ren.shapes:
+    body.add(to_svg(shape, ren.size, defs, clips))
+  if defs.len > 0:
+    let defs_section = new_xml_tree("defs", defs)
+    body = @[defs_section] & body
+  
+  return new_xml_tree("svg", body, to_xml_attributes({
     "width": $ren.size.x,
     "height": $ren.size.y,
     "xmlns": "http://www.w3.org/2000/svg"
