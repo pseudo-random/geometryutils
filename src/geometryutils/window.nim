@@ -20,13 +20,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import tables
 import sdl2 except Color, rgb
 import opengl
 import utils
 
 type
   EventKind* = enum
-    EventQuit, EventResize,
+    EventQuit,
+    EventClose, EventResize,
     EventButtonDown, EventButtonUp,
     EventMove, EventWheel,
     EventKeyDown, EventKeyUp
@@ -54,17 +56,18 @@ type
   
   Window* = ref object of BaseWindow
     win: WindowPtr
-    events: seq[Event]
+    ctx: GlContextPtr
+    id: uint32
 
 proc new_window*(title: string = "Window",
                  size: Index2 = Index2(x: 640, y: 480),
                  pos: Index2 = Index2(x: 100, y: 100),
                  resizable: bool = false): Window =
-  ## Creates a new window. Note that using multiple windows
-  ## is currently not supported.
+  ## Creates a new window. Creating multiple windows
+  ## is supported.
   
-  if sdl2.was_init(INIT_EVERYTHING) != INIT_EVERYTHING:
-    echo "Initializing..."
+  let required_systems = uint32(INIT_VIDEO or INIT_EVENTS)
+  if (sdl2.was_init(INIT_EVERYTHING) and required_systems) != required_systems:
     discard sdl2.init(INIT_EVERYTHING)
     discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4)
     discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MINOR_VERSION, 5)
@@ -77,45 +80,48 @@ proc new_window*(title: string = "Window",
     discard sdl2.gl_set_attribute(SDL_GL_DOUBLEBUFFER, 1)
     discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, 1)
     discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, 16)
-    
   
   var flags = SDL_WINDOW_OPENGL
   if resizable:
     flags = flags or SDL_WINDOW_RESIZABLE
   
-  let win = create_window(
-    title.cstring,
-    pos.x.cint, pos.y.cint,
-    size.x.cint, size.y.cint, flags
-  )
-  discard win.gl_create_context()
+  let
+    win = create_window(
+      title.cstring,
+      pos.x.cint, pos.y.cint,
+      size.x.cint, size.y.cint, flags
+    )
+    ctx = win.gl_create_context()
+  
   load_extensions()
   gl_clear_color(0, 0, 0, 1)
-  return Window(win: win, size: size)
+  return Window(win: win, size: size, ctx: ctx, id: win.get_id())
 
-proc add_stateful(event: Event, window: Window): Event =
-  result = event
-  result.buttons = window.buttons
-  result.pos = window.pos
+proc use*(window: Window) =
+  discard window.win.gl_make_current(window.ctx)
 
-proc add(window: Window, event: Event) =
-  window.events.add(event.add_stateful(window))
+var
+  global_events = new_seq[Event]()
+  window_events = init_table[uint32, seq[Event]]()
 
-proc poll*(window: Window): seq[Event] =
-  ## Reads new events associated with the given window
+proc add_window_event(id: uint32, event: Event) =
+  if id notin window_events:
+    window_events[id] = @[]
+  window_events[id].add(event)
+
+proc poll_global() =
   var evt = sdl2.default_event
   while poll_event(evt):
     case evt.kind:
       of QuitEvent:
-        window.add(Event(kind: EventQuit))
+        global_events.add(Event(kind: EventQuit))
       of WindowEvent:
         let event = cast[WindowEventPtr](evt.addr)
         case event.event:
           of WindowEvent_Resized:
-            var size = get_size(window.win)
-            window.size = Index2(x: size.x.int, y: size.y.int)
-            gl_viewport(0, 0, window.size.x.cint, window.size.y.cint)
-            window.add(Event(kind: EventResize, size: window.size))
+            add_window_event(event.window_id, Event(kind: EventResize))
+          of WindowEvent_Close:
+            add_window_event(event.window_id, Event(kind: EventClose))
           else:
             discard
       of KeyDown, KeyUp:
@@ -124,37 +130,70 @@ proc poll*(window: Window): seq[Event] =
           keycode = event.keysym.sym.int
 
         if evt.kind == KeyDown:
-          window.add(Event(kind: EventKeyDown, keycode: keycode))
+          add_window_event(event.window_id, Event(kind: EventKeyDown,
+            keycode: keycode
+          ))
         else:
-          window.add(Event(kind: EventKeyUp, keycode: keycode))
+          add_window_event(event.window_id, Event(kind: EventKeyUp,
+            keycode: keycode
+          ))
       of MouseMotion:
-        let
-          event = cast[MouseMotionEventPtr](evt.addr)
-          prev_pos = window.pos
-        window.pos = Index2(x: event.x.int, y: event.y.int)
-        window.add(Event(kind: EventMove, prev_pos: prev_pos))
+        let event = cast[MouseMotionEventPtr](evt.addr)
+        add_window_event(event.window_id, Event(kind: EventMove,
+          pos: Index2(x: event.x.int, y: event.y.int)
+        ))
       of MouseButtonDown, MouseButtonUp:
         let
           event = cast[MouseButtonEventPtr](evt.addr)
           button = event.button.int - 1 
-        if button >= 0 and button < window.buttons.len:
-          window.buttons[button] = evt.kind == MouseButtonDown
         
         if evt.kind == MouseButtonDown:
-          window.add(Event(kind: EventButtonDown, button: button))
+          add_window_event(event.window_id, Event(kind: EventButtonDown,
+            button: button
+          ))
         else:
-          window.add(Event(kind: EventButtonUp, button: button))
+          add_window_event(event.window_id, Event(kind: EventButtonUp,
+            button: button
+          ))
       of MouseWheel:
         let event = cast[MouseWheelEventPtr](evt.addr)
-        window.add(Event(kind: EventWheel, delta: Index2(
-          x: event.x.int, y: event.y.int
-        )))
+        add_window_event(event.window_id, Event(kind: EventWheel,
+          delta: Index2(x: event.x.int, y: event.y.int)
+        ))
       else:
         discard
-  
-  result = window.events
-  window.events = @[]
-  return
+
+proc add_stateful(event: var Event, window: Window) =
+  event.buttons = window.buttons
+  event.pos = window.pos
+
+proc process_events(window: Window, events: var seq[Event]) =
+  for event in events.mitems:
+    case event.kind:
+      of EventResize:
+        window.use()
+        var size = get_size(window.win)
+        window.size = Index2(x: size.x.int, y: size.y.int)
+        event.size = window.size
+        gl_viewport(0, 0, window.size.x.cint, window.size.y.cint)
+      of EventButtonDown, EventButtonUp:
+        if event.button >= 0 and event.button < window.buttons.len:
+          window.buttons[event.button] = event.kind == EventButtonDown
+      of EventMove:
+        event.prev_pos = window.pos
+        window.pos = event.pos
+      else: discard
+    event.add_stateful(window)
+
+proc poll*(window: Window): seq[Event] =
+  ## Reads new events associated with the given window
+  poll_global()
+  result = global_events
+  global_events = @[]
+  if window.id in window_events:
+    window.process_events(window_events[window.id])
+    result &= window_events[window.id]
+    window_events[window.id] = @[]
 
 proc swap*(window: Window) =
   ## Swap window
@@ -167,11 +206,13 @@ proc `title=`*(window: Window, title: string) =
   window.win.set_title(title)
 
 proc resize*(window: Window, size: Index2) =
+  ## Resize the given window to the given size
   window.size = size
   window.win.set_size(size.x.cint, size.y.cint)
   gl_viewport(0, 0, size.x.cint, size.y.cint)
 
 proc move*(window: Window, pos: Index2) =
+  ## Moves the given window to a given position
   window.win.set_position(pos.x.cint, pos.y.cint)
 
 proc minimize*(window: Window) =
@@ -182,3 +223,8 @@ proc maximize*(window: Window) =
 
 proc restore*(window: Window) =
   window.win.restore_window()
+
+proc close*(window: Window) =
+  ## Closes the window and deletes its associated context
+  window.ctx.gl_delete_context()
+  window.win.destroy()
