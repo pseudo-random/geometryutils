@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import tables, streams
+import tables, streams, macros
 import utils
 
 proc store*[T: SomeUnsignedInt](stream: Stream, value: T) =
@@ -108,6 +108,11 @@ proc store*(stream: Stream, loc: Location) =
   stream.store(loc.lat)
   stream.store(loc.lon)
 
+proc store*[T](stream: Stream, box: BoundingBox[T]) =
+  mixin store
+  stream.store(box.min)
+  stream.store(box.max)
+
 proc load*[T: SomeInteger](stream: Stream, value: var T) =
   var cur: uint64 = 0
   for it in 0..<sizeof(value):
@@ -128,7 +133,7 @@ proc load*(stream: Stream, str: var string) =
     stream.load(str[it])
 
 proc load*[T](stream: Stream, items: var seq[T]) =
-  mixin store
+  mixin load
   var length: int
   stream.load(length)
   items = new_seq[T](length)
@@ -136,7 +141,7 @@ proc load*[T](stream: Stream, items: var seq[T]) =
     stream.load(items[it])
 
 proc load*[K, V](stream: Stream, items: var Table[K, V]) =
-  mixin store
+  mixin load
   var length: int
   stream.load(length)  
   items = init_table[K, V]()
@@ -191,7 +196,125 @@ proc load*(stream: Stream, loc: var Location) =
   stream.load(loc.lat)
   stream.load(loc.lon)
 
+proc load*[T](stream: Stream, box: var BoundingBox[T]) =
+  mixin load
+  stream.load(box.min)
+  stream.load(box.max)
+
 proc load*[N, T](stream: Stream, items: var array[N, T]) =
   mixin load
   for it in 0..<items.len:
     stream.load(items[it])
+
+proc extract_name(node: NimNode): string =
+  case node.kind:
+    of nnkIdent: return node.str_val
+    of nnkPostfix:
+      if node[0].kind == nnkIdent and
+         node[0].str_val == "*":
+        return node[1].extract_name()
+      else:
+        error("Cannot extract name from " & $node.kind)
+    else:
+      error("Cannot extract name from " & $node.kind)
+
+proc generate_load(node, stream, value: NimNode): NimNode =
+  case node.kind:
+    of nnkObjectTy:
+      if node[1].kind == nnkOfInherit:
+        error("Cannot generate load proc for objects with inheritance")
+      return generate_load(node[2], stream, value)
+    of nnkRecList:
+      result = new_nim_node(nnkStmtList)
+      for field in node:
+        result.add(field.generate_load(stream, value))
+    of nnkIdentDefs:
+      return new_call("load", stream, new_dot_expr(
+        value, ident(node[0].extract_name())
+      ))
+    of nnkSym:
+      return new_call("load", stream, value)
+    of nnkRefTy:
+      let nil_sym = gen_sym(nskVar, "nil_sym")
+      result = new_stmt_list(
+        new_var_stmt(nil_sym, new_lit(false)),
+        new_call("load", stream, nil_sym)
+      )
+      var if_cond = new_nim_node(nnkIfStmt)
+      if_cond.add(new_nim_node(nnkElifBranch)
+        .add(nil_sym)
+        .add(new_stmt_list(
+          new_assignment(value, new_nil_lit())
+        )))
+      if_cond.add(new_nim_node(nnkElse)
+        .add(new_stmt_list(
+          new_call("new", value),
+          generate_load(node[0], stream, value)
+        )))
+      result.add(if_cond)
+    else: error("Node kind not implemented " & $node.kind)
+
+proc generate_store(node, stream, value: NimNode): NimNode =
+  case node.kind:
+    of nnkObjectTy:
+      if node[1].kind == nnkOfInherit:
+        error("Cannot generate store proc for objects with inheritance")
+      return generate_store(node[2], stream, value)
+    of nnkRecList:
+      result = new_nim_node(nnkStmtList)
+      for field in node:
+        result.add(field.generate_store(stream, value))
+    of nnkIdentDefs:
+      return new_call("store", stream, new_dot_expr(
+        value, ident(node[0].extract_name())
+      ))
+    of nnkSym:
+      return new_call("store", stream, value)
+    of nnkRefTy:
+      result = new_nim_node(nnkIfStmt)
+      result.add(new_nim_node(nnkElifBranch)
+        .add(new_call("is_nil", value))
+        .add(new_stmt_list(
+          new_call("store", stream, new_lit(true))
+        )))
+      result.add(new_nim_node(nnkElse)
+        .add(new_stmt_list(
+          new_call("store", stream, new_lit(false)),
+          generate_store(node[0], stream, value)
+        )))
+    else: error("Node kind not implemented " & $node.kind)
+
+macro serializable*(typename: typed): untyped =
+  let
+    impl = typename.get_impl()
+    load_stream = gen_sym(nskParam, "stream")
+    load_value = gen_sym(nskParam, "value")
+    store_stream = gen_sym(nskParam, "stream")
+    store_value = gen_sym(nskParam, "value")
+  
+  result = new_stmt_list(
+    new_proc(
+      name=new_nim_node(nnkPostfix)
+        .add(ident("*"))
+        .add(ident("load")),
+      params=[new_empty_node(),
+        new_ident_defs(load_stream, bind_sym("Stream")),
+        new_ident_defs(load_value, new_nim_node(nnkVarTy).add(typename))
+      ],
+      body=new_stmt_list(
+        generate_load(impl[2], load_stream, load_value)
+      )
+    ),
+    new_proc(
+      name=new_nim_node(nnkPostfix)
+        .add(ident("*"))
+        .add(ident("store")),
+      params=[new_empty_node(),
+        new_ident_defs(store_stream, bind_sym("Stream")),
+        new_ident_defs(store_value, typename)
+      ],
+      body=new_stmt_list(
+        generate_store(impl[2], store_stream, store_value)
+      )
+    )
+  )
