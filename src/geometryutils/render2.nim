@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 import strutils, sequtils, sugar, times
-import tables, hashes, times, random
+import tables, hashes, times, random, math
 import sdl2 except Color, rgb, Event
 import sdl2/ttf
 import opengl
@@ -208,14 +208,6 @@ type
     batches: array[BatchKind, Batch]
     prev_batch: BatchKind
     
-    is_path: bool
-    path_pos: Vec2
-    path_start: Vec2
-    
-    fill*: Color
-    stroke*: Color
-    stroke_width*: float64
-    
     stats*: Stats2
   
   Stats2* = object
@@ -370,9 +362,6 @@ proc new_render2*(window: BaseWindow): Render2 =
   
   return Render2(
     window: window,
-    fill: grey(0),
-    stroke: grey(0),
-    stroke_width: 1,
     batches: [
       new_batch(prog_solid, 1024),
       new_batch(prog_ellipse, 1024),
@@ -421,41 +410,47 @@ proc add(verts: var seq[GLfloat], color: Color) =
   verts.add(GLfloat(color.b))
   verts.add(GLfloat(color.a))
 
-proc ellipse_corner*(ren: var Render2, pos, size: Vec2) =
+proc ellipse_corner*(ren: var Render2,
+                     pos, size: Vec2,
+                     color: Color = grey(0)) =
   var verts: seq[GLfloat] = @[]
   verts.add(new_vec3(pos, 0))
   verts.add(Vec2(x: -1, y: -1))
-  verts.add(ren.fill)
+  verts.add(color)
   verts.add(new_vec3(pos + Vec2(x: size.x), 0))
   verts.add(Vec2(x: 1, y: -1))
-  verts.add(ren.fill)
+  verts.add(color)
   verts.add(new_vec3(pos + Vec2(y: size.y), 0))
   verts.add(Vec2(x: -1, y: 1))
-  verts.add(ren.fill)
+  verts.add(color)
   verts.add(new_vec3(pos + size, 0))
   verts.add(Vec2(x: 1, y: 1))
-  verts.add(ren.fill)
+  verts.add(color)
   ren.add(BatchEllipse, verts, @[
     GLuint 0, 1, 3,
     2, 0, 3
   ])
 
-proc rect*(ren: var Render2, pos, size: Vec2) =
+proc rect*(ren: var Render2,
+           pos, size: Vec2,
+           color: Color = grey(0)) =
   var verts: seq[GLfloat] = @[]
   verts.add(new_vec3(pos, 0))
-  verts.add(ren.fill)
+  verts.add(color)
   verts.add(new_vec3(pos + Vec2(x: size.x), 0))
-  verts.add(ren.fill)
+  verts.add(color)
   verts.add(new_vec3(pos + Vec2(y: size.y), 0))
-  verts.add(ren.fill)
+  verts.add(color)
   verts.add(new_vec3(pos + size, 0))
-  verts.add(ren.fill)
+  verts.add(color)
   ren.add(BatchSolid, verts, @[
     GLuint 0, 1, 3,
     2, 0, 3
   ])
 
-proc rect*(ren: var Render2, pos, size, radius: Vec2) =
+proc rect*(ren: var Render2,
+           pos, size, radius: Vec2,
+           color: Color = grey (0)) =
   var verts: seq[GLfloat] = @[]
 
   block rects:
@@ -476,7 +471,7 @@ proc rect*(ren: var Render2, pos, size, radius: Vec2) =
                 pos + size - Vec2(x: radius.x)]:
       verts.add(new_vec3(pos, 0))
       verts.add(Vec2())
-      verts.add(ren.fill)
+      verts.add(color)
 
   block corners:
     for (pos, uv) in [# Top left
@@ -501,7 +496,7 @@ proc rect*(ren: var Render2, pos, size, radius: Vec2) =
                       (pos + size - radius + radius, Vec2(x: 1, y: 1))]:
       verts.add(new_vec3(pos, 0))
       verts.add(uv)
-      verts.add(ren.fill)
+      verts.add(color)
 
   var indices: seq[GLuint] = @[]
   for it in 0..<7:
@@ -513,42 +508,36 @@ proc rect*(ren: var Render2, pos, size, radius: Vec2) =
 proc rot90(vec: Vec2): Vec2 =
   Vec2(x: -vec.y, y: vec.x)
 
-proc line*(ren: var Render2, a, b: Vec2) =
-  let offset = normalize(b - a).rot90() * ren.stroke_width / 2
+proc line*(ren: var Render2,
+           a, b: Vec2,
+           color: Color = grey(0),
+           width: float64 = 1) =
+  let
+    offset = normalize(b - a).rot90() * width / 2
   var verts: seq[GLfloat] = @[]
   
   for pos in [a + offset, b + offset, a - offset, b - offset]:
     verts.add(new_vec3(pos, 0))
-    verts.add(ren.stroke)
+    verts.add(color)
   
   ren.add(BatchSolid, verts, @[GLuint 0, 1, 3, 2, 0, 3])
 
-proc set_path_pos(ren: var Render2, pos: Vec2) =
-  if not ren.is_path:
-    ren.path_start = pos
-    ren.is_path = true
-  ren.path_pos = pos
+proc rect*(ren: var Render2,
+           pos, size: Vec2,
+           radius: float64,
+           color: Color = grey(0)) =
+  ren.rect(pos, size, Vec2(x: radius, y: radius), color=color)
 
-proc move_to*(ren: var Render2, pos: Vec2) =
-  ren.set_path_pos(pos)
+proc ellipse*(ren: var Render2,
+              pos, size: Vec2,
+              color: Color = grey(0)) =
+  ren.ellipse_corner(pos - size, size * 2, color=color)
 
-proc line_to*(ren: var Render2, pos: Vec2) =
-  ren.line(ren.path_pos, pos)
-  ren.set_path_pos(pos)
-
-proc end_path*(ren: var Render2, close: bool = false) =
-  if close:
-    ren.line(ren.path_start, ren.path_pos)
-  ren.is_path = false
-
-proc rect*(ren: var Render2, pos, size: Vec2, radius: float64) =
-  ren.rect(pos, size, Vec2(x: radius, y: radius))
-
-proc ellipse*(ren: var Render2, pos, size: Vec2) =
-  ren.ellipse_corner(pos - size / 2, size)
-
-proc circle*(ren: var Render2, pos: Vec2, radius: float64) =
-  ren.ellipse(pos, Vec2(x: radius, y: radius))
+proc circle*(ren: var Render2,
+             pos: Vec2,
+             radius: float64,
+             color: Color = grey(0)) =
+  ren.ellipse(pos, Vec2(x: radius, y: radius), color=color)
 
 proc add*(ren: var Render2, texture: Texture, pos: Vec2, size: Vec2) =
   let idx = ren.add(BatchTexture, @[texture])

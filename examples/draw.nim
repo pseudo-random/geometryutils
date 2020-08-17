@@ -25,12 +25,8 @@ while is_running:
   
   ren.background(grey(1))
   for path in paths:
-    for it, point in path:
-      if it == 0:
-        ren.move_to(point)
-      else:
-        ren.line_to(point)
-    ren.end_path()
+    for it in 1..<path.len:
+      ren.line(path[it - 1], path[it])
   ren.render(stats)
   win.swap()
   

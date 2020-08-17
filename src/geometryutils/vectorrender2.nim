@@ -40,7 +40,7 @@ type
 
   ShapeKind = enum
     ShapeBackground, ShapeRect,
-    ShapeCircle, ShapeEllipse,
+    ShapeEllipse,
     ShapeLine, ShapePath,
     ShapeText
 
@@ -54,9 +54,6 @@ type
       of ShapeRect:
         rect_pos: Vec2
         rect_size: Vec2
-      of ShapeCircle:
-        circle_pos: Vec2
-        circle_radius: float64
       of ShapeLine:
         line_a: Vec2
         line_b: Vec2
@@ -118,8 +115,8 @@ proc rect*(ren: var VectorRender2, pos, size: Vec2) =
   ).add_style(ren))
 
 proc circle*(ren: var VectorRender2, pos: Vec2, radius: float64) =
-  ren.shapes.add(Shape(kind: ShapeCircle,
-    circle_pos: pos, circle_radius: radius
+  ren.shapes.add(Shape(kind: ShapeEllipse,
+    ellipse_pos: pos, ellipse_size: Vec2(x: radius, y: radius)
   ).add_style(ren))
 
 proc ellipse*(ren: var VectorRender2, pos, size: Vec2) =
@@ -227,12 +224,6 @@ proc to_svg*(shape: Shape,
              defs: var seq[XmlNode],
              clips: var Table[Box2, string]): XmlNode =
   case shape.kind:
-    of ShapeCircle:
-      return new_xml_tree("circle", [], to_xml_attributes({
-        "cx": $shape.circle_pos.x,
-        "cy": $shape.circle_pos.y,
-        "r": $shape.circle_radius,
-      })).add_style(shape, defs, clips)
     of ShapeRect:
       return new_xml_tree("rect", [], to_xml_attributes({
         "x": $shape.rect_pos.x,
@@ -294,3 +285,66 @@ proc to_svg*(ren: VectorRender2): XmlNode =
     "height": $ren.size.y,
     "xmlns": "http://www.w3.org/2000/svg"
   }))
+
+proc render_to*[T](ren: VectorRender2, target: var T) =
+  mixin background, line, ellipse, rect
+  for shape in ren.shapes:
+    case shape.kind:
+      of ShapeBackground:
+        target.background(shape.fill)
+      of ShapeLine:
+        if shape.stroke.a != 0:
+          target.line(shape.line_a, shape.line_b,
+            color=shape.stroke,
+            width=shape.stroke_width
+          )
+      of ShapeEllipse:
+        if shape.fill.a != 0:
+          target.ellipse(shape.ellipse_pos, shape.ellipse_size, color=shape.fill)
+      of ShapePath:
+        var
+          pos: Vec2
+          start: Vec2
+          is_start = true
+        
+        template set_pos(new_pos) =
+          if is_start:
+            start = new_pos
+            is_start = false
+          pos = new_pos
+        
+        for point in shape.path:
+          case point.kind:
+            of PathMove: set_pos(point.move)
+            of PathLine:
+              target.line(pos, point.line,
+                color=shape.stroke,
+                width=shape.stroke_width
+              )
+              set_pos(point.line)
+            of PathClose:
+              target.line(pos, start,
+                color=shape.stroke,
+                width=shape.stroke_width
+              )
+      of ShapeRect:
+        if shape.fill.a != 0:
+          target.rect(shape.rect_pos, shape.rect_size,
+            color=shape.fill
+          )
+        if shape.stroke.a != 0:
+          let positions = [
+            shape.rect_pos,
+            shape.rect_pos + Vec2(x: shape.rect_size.x),
+            shape.rect_pos + shape.rect_size,
+            shape.rect_pos + Vec2(y: shape.rect_size.y)
+          ]
+          for it in 0..<positions.len:
+            let
+              a = positions[it]
+              b = positions[(it + 1) mod positions.len]
+            target.line(a, b,
+              color=shape.stroke,
+              width=shape.stroke_width
+            )
+      else: discard
