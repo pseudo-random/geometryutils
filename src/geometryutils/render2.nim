@@ -183,7 +183,7 @@ const
       if (length(p_uv) < 1) {
         color = p_color;
       } else {
-        color = vec4(p_color.xyz, 0);
+        discard;
       }
     }
   """
@@ -390,10 +390,13 @@ proc add(ren: var Render2,
   return ren.batches[batch_kind].add(textures, ren.window.size, ren.stats)
 
 proc background*(ren: var Render2, color: Color) =
+  gl_disable(GL_STENCIL_TEST)
+  gl_stencil_func(GL_ALWAYS, 0, 0)
+  gl_clear(GL_STENCIL_BUFFER_BIT)
   for batch in ren.batches.mitems:
     batch.clear()
   gl_clear_color(color.r.GLfloat, color.g.GLfloat, color.b.GLfloat, color.a.GLfloat)
-  gl_clear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
+  gl_clear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
 proc add(verts: var seq[GLfloat], vec: Vec2) =
   verts.add(GLfloat(vec.x))
@@ -588,6 +591,24 @@ proc circle*(ren: var Render2,
              radius: float64,
              color: Color = grey(0)) =
   ren.ellipse(pos, Vec2(x: radius, y: radius), color=color)
+
+proc begin_clip*(ren: var Render2) =
+  ren.flush()
+  gl_enable(GL_STENCIL_TEST)
+  gl_stencil_mask(0xff)
+  gl_stencil_func(GL_NEVER, 0, 0)
+  gl_stencil_op(GL_INCR, GL_INCR, GL_INCR)
+
+proc end_clip*(ren: var Render2) =
+  ren.flush()
+  gl_stencil_func(GL_NOTEQUAL, 0, 0xff)
+  gl_stencil_op(GL_KEEP, GL_KEEP, GL_KEEP)
+
+proc no_clip*(ren: var Render2) =
+  ren.flush()
+  gl_disable(GL_STENCIL_TEST)
+  gl_stencil_func(GL_ALWAYS, 0, 0)
+  gl_clear(GL_STENCIL_BUFFER_BIT)
 
 proc add*(ren: var Render2, texture: Texture, pos: Vec2, size: Vec2) =
   let idx = ren.add(BatchTexture, @[texture])

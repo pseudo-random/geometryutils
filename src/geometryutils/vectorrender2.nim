@@ -107,6 +107,7 @@ proc add_style(shape: Shape, ren: VectorRender2): Shape =
     result.clip = ren.clip
 
 proc background*(ren: var VectorRender2, color: Color) =
+  ren.shapes = @[]
   ren.shapes.add(Shape(kind: ShapeBackground, fill: color))
 
 proc rect*(ren: var VectorRender2, pos, size: Vec2) =
@@ -287,8 +288,22 @@ proc to_svg*(ren: VectorRender2): XmlNode =
   }))
 
 proc render_to*[T](ren: VectorRender2, target: var T) =
-  mixin background, line, ellipse, rect, path
+  mixin background, line, ellipse, rect, path, no_clip, end_clip, begin_clip
+  var
+    current_has_clip = false
+    current_clip: Box2
   for shape in ren.shapes:
+    if shape.has_clip != current_has_clip or
+       (shape.clip != current_clip and shape.has_clip):
+      if shape.has_clip:
+        target.begin_clip()
+        target.rect(shape.clip.min, shape.clip.size)
+        target.end_clip()
+      else:
+        target.no_clip()
+      current_has_clip = shape.has_clip
+      current_clip = shape.clip
+    
     case shape.kind:
       of ShapeBackground:
         target.background(shape.fill)

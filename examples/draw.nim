@@ -37,6 +37,5 @@ while is_running:
   ren.render(stats)
   win.swap()
   
-  #echo stats.triangles
-  echo paths.len
+  echo stats.triangles
   echo stats.average_fps()

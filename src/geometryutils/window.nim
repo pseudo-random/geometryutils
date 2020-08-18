@@ -62,7 +62,8 @@ type
 proc new_window*(title: string = "Window",
                  size: Index2 = Index2(x: 640, y: 480),
                  pos: Index2 = Index2(x: 100, y: 100),
-                 resizable: bool = false): Window =
+                 resizable: bool = false,
+                 benchmark: bool = false): Window =
   ## Creates a new window. Creating multiple windows
   ## is supported.
   
@@ -80,6 +81,8 @@ proc new_window*(title: string = "Window",
     discard sdl2.gl_set_attribute(SDL_GL_DOUBLEBUFFER, 1)
     discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, 1)
     discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, 16)
+    
+    discard sdl2.gl_set_attribute(SDL_GL_STENCIL_SIZE, 1)
   
   var flags = SDL_WINDOW_OPENGL
   if resizable:
@@ -95,6 +98,8 @@ proc new_window*(title: string = "Window",
   
   load_extensions()
   gl_clear_color(0, 0, 0, 1)
+  if benchmark:
+    discard gl_set_swap_interval(0)
   return Window(win: win, size: size, ctx: ctx, id: win.get_id())
 
 proc use*(window: Window) =
