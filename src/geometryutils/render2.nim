@@ -512,8 +512,7 @@ proc line*(ren: var Render2,
            a, b: Vec2,
            color: Color = grey(0),
            width: float64 = 1) =
-  let
-    offset = normalize(b - a).rot90() * width / 2
+  let offset = normalize(b - a).rot90() * width / 2
   var verts: seq[GLfloat] = @[]
   
   for pos in [a + offset, b + offset, a - offset, b - offset]:
@@ -521,6 +520,57 @@ proc line*(ren: var Render2,
     verts.add(color)
   
   ren.add(BatchSolid, verts, @[GLuint 0, 1, 3, 2, 0, 3])
+
+proc path*(ren: var Render2,
+           points: seq[Vec2],
+           color: Color = grey(0),
+           width: float64 = 1) =
+  if points.len < 2:
+    return
+  var
+    verts: seq[Glfloat]
+    tris: seq[GLuint]
+  
+  block:
+    let offset = normalize(points[1] - points[0]).rot90() * width / 2
+    verts.add(new_vec3(points[0] + offset, 0))
+    verts.add(color)
+    verts.add(new_vec3(points[0] - offset, 0))
+    verts.add(color)
+  
+  for it in 2..<points.len:
+    let
+      left = points[it - 2]
+      center = points[it - 1]
+      right = points[it]
+      offset_a = normalize(center - left).rot90()
+      offset_b = normalize(right - center).rot90()
+    var
+      offset = (offset_a + offset_b) / 2
+      l = (width / 2) / (cos(math.arccos(dot(offset_a, offset_b)) / 2))
+    if l > width * 2 or classify(l) == fcNaN or l <= 0:
+      offset = offset_a
+      l = width / 2
+    offset = offset.normalize() * l
+    
+    verts.add(new_vec3(center + offset, 0))
+    verts.add(color)
+    verts.add(new_vec3(center - offset, 0))
+    verts.add(color)
+  
+  block:
+    let offset = normalize(points[^1] - points[^2]).rot90() * width / 2
+    verts.add(new_vec3(points[^1] + offset, 0))
+    verts.add(color)
+    verts.add(new_vec3(points[^1] - offset, 0))
+    verts.add(color)
+  
+  for it in 1..<points.len:
+    let base = GLuint((it - 1) * 2)
+    tris.add([base + 0, base + 1, base + 3])
+    tris.add([base + 3, base + 2, base + 0])
+  
+  ren.add(BatchSolid, verts, tris)
 
 proc rect*(ren: var Render2,
            pos, size: Vec2,

@@ -287,7 +287,7 @@ proc to_svg*(ren: VectorRender2): XmlNode =
   }))
 
 proc render_to*[T](ren: VectorRender2, target: var T) =
-  mixin background, line, ellipse, rect
+  mixin background, line, ellipse, rect, path
   for shape in ren.shapes:
     case shape.kind:
       of ShapeBackground:
@@ -306,6 +306,7 @@ proc render_to*[T](ren: VectorRender2, target: var T) =
           pos: Vec2
           start: Vec2
           is_start = true
+          points: seq[Vec2]
         
         template set_pos(new_pos) =
           if is_start:
@@ -315,18 +316,27 @@ proc render_to*[T](ren: VectorRender2, target: var T) =
         
         for point in shape.path:
           case point.kind:
-            of PathMove: set_pos(point.move)
+            of PathMove:
+              if points.len > 0:
+                target.path(points,
+                  color=shape.stroke,
+                  width=shape.stroke_width
+                )
+                points = @[]
+              points.add(point.move)
+              set_pos(point.move)
             of PathLine:
-              target.line(pos, point.line,
-                color=shape.stroke,
-                width=shape.stroke_width
-              )
+              points.add(point.line)
               set_pos(point.line)
             of PathClose:
-              target.line(pos, start,
-                color=shape.stroke,
-                width=shape.stroke_width
-              )
+              points.add(start)
+        
+        if points.len > 0:
+          target.path(points,
+            color=shape.stroke,
+            width=shape.stroke_width
+          )
+          points = @[]
       of ShapeRect:
         if shape.fill.a != 0:
           target.rect(shape.rect_pos, shape.rect_size,
