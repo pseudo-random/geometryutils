@@ -54,20 +54,20 @@ proc store*(stream: Stream, value: bool) =
     stream.write(uint8(0))
 
 proc store*(stream: Stream, str: string) =
-  stream.store(str.len)
+  stream.store(str.len.int64)
   for chr in str:
     stream.store(chr)
 
 proc store*[K, V](stream: Stream, tab: Table[K, V]) =
   mixin store
-  stream.store(tab.len)
+  stream.store(tab.len.int64)
   for key in tab.keys:
     stream.store(key)
     stream.store(tab[key])
 
 proc store*[T](stream: Stream, items: seq[T]) =
   mixin store
-  stream.store(items.len)
+  stream.store(items.len.int64)
   for item in items:
     stream.store(item)
 
@@ -126,26 +126,26 @@ proc load*(stream: Stream, value: var bool) =
   value = stream.read_uint8() != 0
 
 proc load*(stream: Stream, str: var string) =
-  var length = 0
+  var length: int64
   stream.load(length)
-  str = new_string(length)
+  str = new_string(int(length))
   for it in 0..<length:
     stream.load(str[it])
 
 proc load*[T](stream: Stream, items: var seq[T]) =
   mixin load
-  var length: int
+  var length: int64
   stream.load(length)
-  items = new_seq[T](length)
+  items = new_seq[T](int(length))
   for it in 0..<length:
     stream.load(items[it])
 
 proc load*[K, V](stream: Stream, items: var Table[K, V]) =
   mixin load
-  var length: int
+  var length: int64
   stream.load(length)  
   items = init_table[K, V]()
-  for it in 0..<length:
+  for it in 0..<int(length):
     var
       key: K
       value: V
