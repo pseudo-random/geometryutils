@@ -33,6 +33,7 @@ template base_operations(T, B) =
   proc `-`*(a, b: T): T {.borrow.}
   proc `*`*(a, b: T): T {.borrow.}
   proc `/`*(a, b: T): T {.borrow.}
+  proc `mod`*(a, b: T): T {.borrow.}
   
   proc `*`*(a: B, b: T): T {.borrow.}
   proc `*`*(a: T, b: B): T {.borrow.}
@@ -45,11 +46,16 @@ template base_operations(T, B) =
   proc `*=`*(a: var T, b: T) {.borrow.}
   proc `/=`*(a: var T, b: T) {.borrow.}
   
+  proc `*=`*(a: var T, b: B) {.borrow.}
+  proc `/=`*(a: var T, b: B) {.borrow.}
+  
   proc `<`*(a, b: T): bool {.borrow.}
   proc `==`*(a, b: T): bool {.borrow.}
   proc `<=`*(a, b: T): bool {.borrow.}
 
   proc abs*(a: T): T {.borrow.}
+  proc min*(a, b: T): T {.borrow.}
+  proc max*(a, b: T): T {.borrow.}
   
   proc hash*(a: T): Hash {.borrow.}
 
