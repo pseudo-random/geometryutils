@@ -92,7 +92,7 @@ proc render_static*(font: Font,
 
 const
   TEXTURE_VERT_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec3 pos;
     in vec2 uv;
@@ -111,7 +111,7 @@ const
   """
   
   TEXTURE_FRAG_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in float p_id;
     in vec2 p_uv;
@@ -127,7 +127,7 @@ const
 
 const
   SOLID_VERT_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec3 pos;
     in vec4 color;
@@ -142,7 +142,7 @@ const
     }
   """
   SOLID_FRAG_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec4 p_color;
     out vec4 color;
@@ -154,7 +154,7 @@ const
 
 const
   ELLIPSE_VERT_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec3 pos;
     in vec2 uv;
@@ -172,7 +172,7 @@ const
     }
   """
   ELLIPSE_FRAG_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec2 p_uv;
     in vec4 p_color;

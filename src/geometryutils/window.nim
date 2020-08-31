@@ -49,6 +49,8 @@ type
         delta*: Index2
       else: discard
 
+  WindowError* = ref object of Exception
+
   BaseWindow* = ref object of RootObj
     size*: Index2
     pos*: Index2
@@ -63,26 +65,36 @@ proc new_window*(title: string = "Window",
                  size: Index2 = Index2(x: 640, y: 480),
                  pos: Index2 = Index2(x: 100, y: 100),
                  resizable: bool = false,
-                 benchmark: bool = false): Window =
+                 benchmark: bool = false,
+                 version: tuple[major: int, minor: int] = (4, 3),
+                 multisample_samples: int = 8,
+                 multisample_buffers: int = 1,
+                 doublebuffer: bool = true,
+                 stencil_size: int = 1,
+                 red_size: int = 8,
+                 green_size: int = 8,
+                 blue_size: int = 8,
+                 depth_size: int = 24): Window =
   ## Creates a new window. Creating multiple windows
   ## is supported.
   
   let required_systems = uint32(INIT_VIDEO or INIT_EVENTS)
   if (sdl2.was_init(INIT_EVERYTHING) and required_systems) != required_systems:
-    discard sdl2.init(INIT_EVERYTHING)
-    discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4)
-    discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MINOR_VERSION, 5)
+    if sdl2.init(INIT_EVERYTHING) != SdlSuccess:
+      raise WindowError(msg: "Failed to initialize sdl")
+    discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MAJOR_VERSION, version.major.cint)
+    discard sdl2.gl_set_attribute(SDL_GL_CONTEXT_MINOR_VERSION, version.minor.cint)
 
-    discard sdl2.gl_set_attribute(SDL_GL_RED_SIZE, 8)
-    discard sdl2.gl_set_attribute(SDL_GL_GREEN_SIZE, 8)
-    discard sdl2.gl_set_attribute(SDL_GL_BLUE_SIZE, 8)
-    discard sdl2.gl_set_attribute(SDL_GL_DEPTH_SIZE, 24)
+    discard sdl2.gl_set_attribute(SDL_GL_RED_SIZE, red_size.cint)
+    discard sdl2.gl_set_attribute(SDL_GL_GREEN_SIZE, green_size.cint)
+    discard sdl2.gl_set_attribute(SDL_GL_BLUE_SIZE, blue_size.cint)
+    discard sdl2.gl_set_attribute(SDL_GL_DEPTH_SIZE, depth_size.cint)
     
-    discard sdl2.gl_set_attribute(SDL_GL_DOUBLEBUFFER, 1)
-    discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, 1)
-    discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, 16)
+    discard sdl2.gl_set_attribute(SDL_GL_DOUBLEBUFFER, ord(doublebuffer).cint)
+    discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, multisample_buffers.cint)
+    discard sdl2.gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, multisample_samples.cint)
     
-    discard sdl2.gl_set_attribute(SDL_GL_STENCIL_SIZE, 1)
+    discard sdl2.gl_set_attribute(SDL_GL_STENCIL_SIZE, stencil_size.cint)
   
   var flags = SDL_WINDOW_OPENGL
   if resizable:

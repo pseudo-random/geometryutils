@@ -381,7 +381,7 @@ proc `==`(a, b: Wireframe): bool = a[].addr == b[].addr
 const
   # TODO: Load files at compile time
   VERTEX_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec3 pos;
     in vec3 normal;
@@ -403,7 +403,7 @@ const
     }
   """
   FRAGMENT_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
   
     in vec4 p_color;
     in vec3 p_normal;
@@ -443,7 +443,7 @@ const
 
 const
   WIREFRAME_VERTEX_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
     
     in vec3 pos;
     
@@ -462,7 +462,7 @@ const
     }
   """
   WIREFRAME_FRAGMENT_SHADER_SOURCE = """
-    #version 450 core
+    #version 430 core
   
     in vec4 p_color;
     in vec3 p_world_pos;
