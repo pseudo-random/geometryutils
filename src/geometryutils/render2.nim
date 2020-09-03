@@ -84,7 +84,7 @@ proc render_static*(font: Font,
   gl_bind_texture(GL_TEXTURE_2D, id)
   gl_tex_image_2d(GL_TEXTURE_2D, 0, mode.GLint, surf.w, surf.h, 0, mode, GL_UNSIGNED_BYTE, surf.pixels)
   gl_tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-  gl_tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+  gl_tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
   gl_bind_texture(GL_TEXTURE_2D, 0)
   
   result = Texture(id: id, size: Index2(x: surf.w.int, y: surf.h.int))
@@ -610,18 +610,25 @@ proc no_clip*(ren: var Render2) =
   gl_stencil_func(GL_ALWAYS, 0, 0)
   gl_clear(GL_STENCIL_BUFFER_BIT)
 
-proc add*(ren: var Render2, texture: Texture, pos: Vec2, size: Vec2) =
+proc add*(ren: var Render2,
+          texture: Texture,
+          pos: Vec2,
+          size: Vec2,
+          rot: Rad = Rad(0)) =
   let idx = ren.add(BatchTexture, @[texture])
   var verts: seq[GLfloat] = @[]
   for uv in [Vec2(), Vec2(x: 1), Vec2(y: 1), Vec2(x: 1, y: 1)]:
-    verts.add(new_vec3(pos + size * uv, 0))
+    verts.add(new_vec3(pos + rotate(size * uv, rot), 0))
     verts.add(uv)
     verts.add(GLfloat(idx[0]))
   
   ren.add(BatchTexture, verts, @[GLuint 0, 1, 3, 2, 0, 3])
 
-proc add*(ren: var Render2, texture: Texture, pos: Vec2) =
-  ren.add(texture, pos, texture.size.to_vec2())
+proc add*(ren: var Render2,
+          texture: Texture,
+          pos: Vec2,
+          rot: Rad = Rad(0)) =
+  ren.add(texture, pos, texture.size.to_vec2(), rot=rot)
 
 proc render*(ren: var Render2, stats: var Stats2) =
   block:
@@ -640,3 +647,33 @@ proc render*(ren: var Render2, stats: var Stats2) =
 proc render*(ren: var Render2) =
   var stats = Stats2()
   ren.render(stats)
+
+type TextRender2* = object
+  path: string
+  fonts: Table[int, Font]
+
+proc new_text_render2*(path: string): TextRender2 =
+  return TextRender2(path: path)
+
+proc text*(ren: var TextRender2,
+           target: var Render2,
+           pos: Vec2,
+           str: string,
+           size: int = 12,
+           color: Color = grey(0),
+           x_align: TextAlign = AlignStart,
+           y_align: TextAlign = AlignStart,
+           rot: Rad = Rad(0)) =
+  if size notin ren.fonts:
+    ren.fonts[size] = load_font(ren.path, size)
+  let tex = ren.fonts[size].render_static(str, color)
+  var offset = Vec2()
+  case x_align:
+    of AlignStart: discard
+    of AlignMiddle: offset.x = float64(-tex.size.x) / 2
+    of AlignEnd: offset.x = float64(-tex.size.x)
+  case y_align:
+    of AlignStart: offset.y = float64(-size)
+    of AlignMiddle: offset.y = float64(-size) / 2 
+    of AlignEnd: discard
+  target.add(tex, pos + offset.rotate(rot), rot=rot)

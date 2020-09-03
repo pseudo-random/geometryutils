@@ -136,6 +136,12 @@ proc dot*[T](a, b: Vector2[T]): T =
 proc angle*[T](vec: Vector2[T]): Rad =
   Rad(arctan2(vec.y.float64, vec.x.float64))
 
+proc rotate*[T](vec: Vector2[T], angle: Rad): Vector2[T] =
+  return Vector2[T](
+    x: T(vec.x * cos(angle) - vec.y * sin(angle)),
+    y: T(vec.x * sin(angle) + vec.y * cos(angle))
+  )
+
 template lift_mutate_vector2(op) =
   proc op*[T](a: var Vector2[T], b: Vector2[T]) =
     op(a.x, b.x)
@@ -831,3 +837,5 @@ proc new_camera3*(fov: Deg = Deg(35),
     mat: new_identity_mat4()
   )
 
+type TextAlign* = enum
+  AlignStart, AlignMiddle, AlignEnd

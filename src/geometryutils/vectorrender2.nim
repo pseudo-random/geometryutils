@@ -24,9 +24,6 @@ import xmltree, strtabs, sequtils, strutils, sugar, tables
 import utils
 
 type
-  Align* = enum
-    AlignStart, AlignMiddle, AlignEnd
-
   PathKind = enum
     PathMove, PathLine, PathClose
     
@@ -60,8 +57,8 @@ type
       of ShapeText:
         text: string
         text_pos: Vec2
-        text_x_align: Align
-        text_y_align: Align
+        text_x_align: TextAlign
+        text_y_align: TextAlign
         text_rotation: Deg
         font_size: float64
         font_family: string
@@ -133,8 +130,8 @@ proc line*(ren: var VectorRender2, a, b: Vec2) =
 proc text*(ren: var VectorRender2,
            pos: Vec2,
            text: string,
-           x_align: Align = AlignStart,
-           y_align: Align = AlignStart,
+           x_align: TextAlign = AlignStart,
+           y_align: TextAlign = AlignStart,
            rotation: Deg = Deg(0)) =
   ren.shapes.add(Shape(kind: ShapeText,
     text_pos: pos, text: text,
@@ -199,13 +196,13 @@ proc add_style(node: XmlNode,
       clips[shape.clip] = name
     result.attrs["clip-path"] = "url(#" & clips[shape.clip] & ")"
 
-proc to_text_anchor(align: Align): string =
+proc to_text_anchor(align: TextAlign): string =
   case align:
     of AlignStart: "start"
     of AlignMiddle: "middle"
     of AlignEnd: "end"
 
-proc to_text_baseline(align: Align): string =
+proc to_text_baseline(align: TextAlign): string =
   case align:
     of AlignStart: "alphabetic"
     of AlignMiddle: "middle"
@@ -287,7 +284,21 @@ proc to_svg*(ren: VectorRender2): XmlNode =
     "xmlns": "http://www.w3.org/2000/svg"
   }))
 
-proc render_to*[T](ren: VectorRender2, target: var T) =
+type DefaultTextRender = object
+proc text[T](ren: var DefaultTextRender,
+             target: var T,
+             pos: Vec2,
+             str: string,
+             size: int = 12,
+             color: Color = grey(0),
+             x_align: TextAlign = AlignStart,
+             y_align: TextAlign = AlignStart,
+             rot: Rad = Rad(0)) =
+  discard
+
+proc render_to*[T, TextRender](ren: VectorRender2,
+                               target: var T,
+                               text_render: var TextRender) =
   mixin background, line, ellipse, rect, path, no_clip, end_clip, begin_clip
   var
     current_has_clip = false
@@ -372,4 +383,15 @@ proc render_to*[T](ren: VectorRender2, target: var T) =
               color=shape.stroke,
               width=shape.stroke_width
             )
-      else: discard
+      of ShapeText:
+        text_render.text(target, shape.text_pos, shape.text,
+          color = shape.fill,
+          size = shape.font_size.int,
+          x_align = shape.text_x_align,
+          y_align = shape.text_y_align,
+          rot = shape.text_rotation
+        )
+
+proc render_to*[T](ren: VectorRender2, target: var T) =
+  var text_render = DefaultTextRender()
+  render_to(ren, target, text_render)
