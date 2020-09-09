@@ -832,8 +832,8 @@ proc new_camera3*(fov: Deg = Deg(35),
                   far: float64 = 200.0): Camera3 =
   return Camera3(
     fov: fov,
-    near: 0.1,
-    far: 200.0,
+    near: near,
+    far: far,
     mat: new_identity_mat4()
   )
 

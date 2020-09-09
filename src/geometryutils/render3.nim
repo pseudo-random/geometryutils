@@ -685,6 +685,7 @@ type
     zoom*: float64
     zoom_speed*: float64
     rotation_speed*: float64
+    center*: Vec3
     button*: range[0..2]
 
 proc new_orbit_camera_controller*(zoom: float64 = 10,
@@ -721,7 +722,7 @@ proc update*(cont: OrbitCameraController,
     translate = new_translate_mat4(Vec3(z: -cont.zoom))
     rot_y = new_rotate_y_mat4(cont.y)
     rot_x = new_rotate_x_mat4(cont.x)
-  camera.mat = translate * rot_x * rot_y
+  camera.mat = translate * rot_x * rot_y * new_translate_mat4(-cont.center)
 
 type
   ModelCameraController* = object
