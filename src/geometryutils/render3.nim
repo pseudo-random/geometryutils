@@ -272,9 +272,12 @@ proc add_cube*(wireframe: Wireframe, pos, size: Vec3) =
         ))
 
   wireframe.lines &= [
-    [0, 1], [2, 3], [4, 5], [6, 7],
-    [0, 4], [2, 6], [1, 5], [3, 7],
-    [0, 2], [4, 6], [5, 7], [1, 3]
+    [idx + 0, idx + 1], [idx + 2, idx + 3],
+    [idx + 4, idx + 5], [idx + 6, idx + 7],
+    [idx + 0, idx + 4], [idx + 2, idx + 6],
+    [idx + 1, idx + 5], [idx + 3, idx + 7],
+    [idx + 0, idx + 2], [idx + 4, idx + 6],
+    [idx + 5, idx + 7], [idx + 1, idx + 3]
   ]
   
 proc new_cube_wireframe*(pos, size: Vec3): Wireframe =
@@ -333,7 +336,7 @@ type
         ambient*: float64
 
   Render3* = object
-    window: BaseWindow
+    window*: BaseWindow
   
     shader_prog: ShaderProgram
     wireframe_shader_prog: ShaderProgram

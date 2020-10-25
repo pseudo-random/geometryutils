@@ -143,7 +143,7 @@ proc load*[T](stream: Stream, items: var seq[T]) =
 proc load*[K, V](stream: Stream, items: var Table[K, V]) =
   mixin load
   var length: int64
-  stream.load(length)  
+  stream.load(length)
   items = init_table[K, V]()
   for it in 0..<int(length):
     var
